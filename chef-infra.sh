@@ -93,7 +93,7 @@ Vagrant.configure(2) do |config|
     a2.vm.provision "shell", inline: "cd /home/vagrant && curl https://packages.chef.io/files/current/automate/latest/chef-automate_linux_amd64.zip |gunzip - > chef-automate && chmod +x chef-automate"
     a2.vm.provision "shell", inline: "sudo ./chef-automate init-config"
     a2.vm.provision "shell", inline: "sudo ./chef-automate deploy config.toml --skip-preflight"
-    a2.vm.provision "shell", inline: "if [ -f /opt/a2-testing/automate.license ]; then sudo ./chef-automate license apply $(< /opt/a2-testing/automate.license) && sudo ./chef-automate license status ; fi"
+    a2.vm.provision "shell", inline: "if [ -f /opt/a2-testing/automate.license ]; then sudo ./chef-automate license apply \$(< /opt/a2-testing/automate.license) && sudo ./chef-automate license status ; fi"
     a2.vm.provision "shell", inline: "sudo ./chef-automate admin-token > /opt/a2-testing/a2-token"
   end
 
@@ -106,9 +106,9 @@ Vagrant.configure(2) do |config|
     srvr.vm.provision "shell", inline: "echo 192.168.33.200 chef-server.test | sudo tee -a /etc/hosts"
     srvr.vm.provision "shell", inline: "cd /opt/a2-testing && wget -N -nv https://packages.chef.io/files/stable/chef-server/12.17.33/ubuntu/16.04/chef-server-core_12.17.33-1_amd64.deb && sudo dpkg -i /opt/a2-testing/chef-server-core*.deb && chef-server-ctl reconfigure"
     srvr.vm.provision "shell", inline: "mkdir -p /opt/a2-testing/.chef"
-    srvr.vm.provision "shell", inline: "if [ \"$(sudo chef-server-ctl user-show | grep 'admin')\" == \"\" ]; then sudo chef-server-ctl user-create admin first last admin@example.com 'adminpwd' --filename /opt/a2-testing/.chef/admin.pem; fi"
-    srvr.vm.provision "shell", inline: "if [ \"$(sudo chef-server-ctl org-show | grep 'a2')\" == \"\" ]; then sudo chef-server-ctl org-create a2 'automate2' --association_user admin --filename /opt/a2-testing/.chef/a2-validator.pem; fi"
-    srvr.vm.provision "shell", inline: "sudo chef-server-ctl set-secret data_collector token $(< /opt/a2-testing/a2-token) && sudo chef-server-ctl restart nginx && sudo chef-server-ctl restart opscode-erchef"
+    srvr.vm.provision "shell", inline: "if [ \"\$(sudo chef-server-ctl user-show | grep 'admin')\" == \"\" ]; then sudo chef-server-ctl user-create admin first last admin@example.com 'adminpwd' --filename /opt/a2-testing/.chef/admin.pem; fi"
+    srvr.vm.provision "shell", inline: "if [ \"\$(sudo chef-server-ctl org-show | grep 'a2')\" == \"\" ]; then sudo chef-server-ctl org-create a2 'automate2' --association_user admin --filename /opt/a2-testing/.chef/a2-validator.pem; fi"
+    srvr.vm.provision "shell", inline: "sudo chef-server-ctl set-secret data_collector token \$(< /opt/a2-testing/a2-token) && sudo chef-server-ctl restart nginx && sudo chef-server-ctl restart opscode-erchef"
     srvr.vm.provision "shell", inline: "echo \"data_collector['root_url'] = 'https://automate-deployment.test/data-collector/v0/'\" | sudo tee -a /etc/opscode/chef-server.rb"
     srvr.vm.provision "shell", inline: "echo \"profiles['root_url'] = 'https://automate-deployment.test'\" | sudo tee -a /etc/opscode/chef-server.rb"
     srvr.vm.provision "shell", inline: "sudo chef-server-ctl reconfigure"
@@ -132,7 +132,7 @@ Vagrant.configure(2) do |config|
       node.vm.provision "shell", inline: "echo 192.168.33.1#{i} #{node_id}.test | sudo tee -a /etc/hosts"
       node.vm.provision "shell", inline: "sudo pacman -Sy --noconfirm wget binutils fakeroot cronie"
       node.vm.provision "shell", inline: "sudo -H -u vagrant bash -c 'cd /opt/a2-testing && wget -N -nv https://aur.archlinux.org/cgit/aur.git/snapshot/chef-dk.tar.gz && tar -xvzf *.tar.gz'"
-      node.vm.provision "shell", inline: "if [ \"$(ls /opt/a2-testing/chef-dk/chef*xz)\" == \"\" ]; then sudo -H -u vagrant bash -c 'cd /opt/a2-testing/chef-dk && makepkg -s'; fi"
+      node.vm.provision "shell", inline: "if [ \"\$(ls /opt/a2-testing/chef-dk/chef*xz)\" == \"\" ]; then sudo -H -u vagrant bash -c 'cd /opt/a2-testing/chef-dk && makepkg -s'; fi"
       node.vm.provision "shell", inline: "cd /opt/a2-testing/chef-dk && sudo pacman -U --noconfirm *xz"
       node.vm.provision "shell", inline: "sudo mkdir -p /etc/chef && cat >/etc/chef/client.rb <<EOL
 log_level        :info
