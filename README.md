@@ -1,7 +1,7 @@
 Purpose: Stand up an Automate v2.0 evaluation environment
-Chef Automate v2.0
-Chef Server
-X Nodes to Bootstrap and manage
+- Chef Automate v2.0
+- Chef Server
+- X Nodes to Bootstrap and manage
 
 This script will create and download all the files needed to
 accomplish the setup.
@@ -23,18 +23,17 @@ Quick Start:
 - Clone this repo and `cd` into it
 - If you have a license, Create ./automate.license and add valid Automate license. Otherwise, skip this, it can be added later.
 - Make files executable `sudo chmod x+ chef-infra.sh`
-- From the base directory run `./chef-infra.sh`
+- From the base directory run `./chef-infra.sh setup`
 
+- look at `./chef-infra.sh -h` for more info & teardown instructions
 
 * For setup details see the step-by-step setup instructions in the Vagrantfile .vm.provision sections
 
-create/install a2 only
-- vagrant up a2
+create/install a single node only
+- vagrant up [a2|srvr|node1[n]]
 
-create/install Chef Server only
-- vagrant up srvr
+retry creation of a single node
+- vagrant provision [a2|srvr|node1[n]]
 
-create/bootstrap fleet only
-- vagrant up node*
 
 #TODO set node cnt in init.sh

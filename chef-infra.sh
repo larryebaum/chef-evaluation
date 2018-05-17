@@ -1,4 +1,6 @@
 #!/bin/bash
+# Author: Mike Tyler - mtyler - mtyler@chef.io
+# Purpose: Stand up an Automate v2.0 evaluation environment
 
 #
 # helper functions
