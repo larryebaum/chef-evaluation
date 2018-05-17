@@ -63,14 +63,10 @@ EOL
   echo "knife.rb complete."
 }
 #
-# create local knife config
+# create Vagrantfile
 #
-do_vagrantfile() {
-  echo "Configuring Vagrantfile..."
-  if [ -f ./Vagrantfile ] ; then
-    echo "Vagrantfile exists.  Nothing to do here."
-  else
-    cat >Vagrantfile <<EOL
+create_vagrantfile() {
+    cat > Vagrantfile <<EOL
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
@@ -156,8 +152,6 @@ EOL"
 
 end
 EOL
-  fi
-  echo "Vagrantfile complete."
 }
 
 #
@@ -257,6 +251,13 @@ init_test() {
 #
 do_setup() {
   echo "Begin Chef Infrastructure setup..."
+  echo "Creating Vagrantfile..."
+  if [ -f ./Vagrantfile ] ; then
+    echo "Vagrantfile exists.  Nothing to do here."
+  else
+    create_vagrantfile 2>/dev/null
+  fi
+  echo "Vagrantfile complete."
   do_automate_setup
   do_chef_server_setup
   do_local_setup
