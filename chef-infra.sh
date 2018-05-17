@@ -266,19 +266,22 @@ do_setup() {
   do_node_setup $cnt
   #init_test
   # wrap up and repeat the user instructions that are buried in the logs
+  echo "*******************************************************************"
+  echo ""
   echo "To login to Chef Automate, use the following credentials"
   echo "        URL: https://automate-deployment.test to try Chef Automate"
   echo "        User: admin"
   vagrant ssh a2 -c "sudo ./chef-automate config show | grep 'password'" >/dev/tty 2>&1
   echo ""
-  echo "cleanup using ./clean.sh"
+  echo "cleanup using ./chef-infra.sh teardown"
   echo ""
   echo "Chef Infrastructure setup completed."
+  echo "*******************************************************************"
 }
 
 do_teardown() {
   echo "Begin Chef Infrastructure teardown"
-if $is_pre ; then echo "-p specified. Only printing actions of this script..." ; fi
+  if $is_pre ; then echo "-p specified. Only printing actions of this script..." ; fi
 
   remove_host automate-deployment.test $is_pre
   remove_host chef-server.test $is_pre
@@ -294,8 +297,8 @@ if $is_pre ; then echo "-p specified. Only printing actions of this script..." ;
       # directory containing compiled archlinux chef-dk package
       mv ./chef-dk ./removing
       mv *.deb ./removing
+    fi
   fi
-fi
 
   echo "create temporary removing dir..."
   if ! $is_pre ; then mkdir -p removing ; fi

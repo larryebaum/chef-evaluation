@@ -1,6 +1,6 @@
 Purpose: Stand up an Automate v2.0 evaluation environment
 - Chef Automate v2.0
-- Chef Server
+- Chef Server (Manage-less)
 - X Nodes to Bootstrap and manage
 
 This script will create and download all the files needed to
