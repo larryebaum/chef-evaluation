@@ -24,11 +24,8 @@ Vagrant.configure(2) do |config|
     a2.vm.provision "shell", inline: "cd /home/vagrant && curl https://packages.chef.io/files/current/automate/latest/chef-automate_linux_amd64.zip |gunzip - > chef-automate && chmod +x chef-automate"
     a2.vm.provision "shell", inline: "sudo ./chef-automate init-config"
     a2.vm.provision "shell", inline: "sudo ./chef-automate deploy config.toml --skip-preflight"
-    a2.vm.provision "shell", inline: "sudo ./chef-automate license apply $(< /opt/a2-testing/add.license.key.tothis.before.init)"
-    a2.vm.provision "shell", inline: "sudo ./chef-automate license status"
+    a2.vm.provision "shell", inline: "if [ -f /opt/a2-testing/automate.license ]; then sudo ./chef-automate license apply $(< /opt/a2-testing/automate.license) && sudo ./chef-automate license status ; fi"
     a2.vm.provision "shell", inline: "sudo ./chef-automate admin-token > /opt/a2-testing/a2-token"
-    a2.vm.provision "shell", inline: "sudo ./chef-automatconfig show | grep 'password' > /opt/a2-testing/admin-password"
-
   end
 
   config.vm.define :srvr do |srvr|
@@ -36,12 +33,12 @@ Vagrant.configure(2) do |config|
     srvr.vm.synced_folder ".", "/opt/a2-testing", create: true
     srvr.vm.hostname = 'chef-server.test'
     srvr.vm.network 'private_network', ip: '192.168.33.200'
-    srvr.vm.provision "shell", inline: "apt-get update && apt-get install -y unzip"
     srvr.vm.provision "shell", inline: "echo 192.168.33.199 automate-deployment.test | sudo tee -a /etc/hosts"
     srvr.vm.provision "shell", inline: "echo 192.168.33.200 chef-server.test | sudo tee -a /etc/hosts"
-    srvr.vm.provision "shell", inline: "cd /home/vagrant && wget -N -nv https://packages.chef.io/files/stable/chef-server/12.17.33/ubuntu/16.04/chef-server-core_12.17.33-1_amd64.deb && sudo dpkg -i /home/vagrant/chef-server-core*.deb && chef-server-ctl reconfigure"
-    srvr.vm.provision "shell", inline: "if [ '$(sudo chef-server-ctl user-show | grep admin)' == '' ]; then sudo chef-server-ctl user-create admin first last admin@example.com 'adminpwd' --filename /opt/a2-testing/.chef/admin.pem; fi"
-    srvr.vm.provision "shell", inline: "if [ '$(sudo chef-server-ctl org-show | grep a2)' == '' ]; then sudo chef-server-ctl org-create a2 'automate2' --association_user admin --filename /opt/a2-testing/.chef/a2-validator.pem; fi"
+    srvr.vm.provision "shell", inline: "cd /opt/a2-testing && wget -N -nv https://packages.chef.io/files/stable/chef-server/12.17.33/ubuntu/16.04/chef-server-core_12.17.33-1_amd64.deb && sudo dpkg -i /opt/a2-testing/chef-server-core*.deb && chef-server-ctl reconfigure"
+    srvr.vm.provision "shell", inline: "mkdir -p /opt/a2-testing/.chef"
+    srvr.vm.provision "shell", inline: "if [ \"$(sudo chef-server-ctl user-show | grep 'admin')\" == \"\" ]; then sudo chef-server-ctl user-create admin first last admin@example.com 'adminpwd' --filename /opt/a2-testing/.chef/admin.pem; fi"
+    srvr.vm.provision "shell", inline: "if [ \"$(sudo chef-server-ctl org-show | grep 'a2')\" == \"\" ]; then sudo chef-server-ctl org-create a2 'automate2' --association_user admin --filename /opt/a2-testing/.chef/a2-validator.pem; fi"
     srvr.vm.provision "shell", inline: "sudo chef-server-ctl set-secret data_collector token $(< /opt/a2-testing/a2-token) && sudo chef-server-ctl restart nginx && sudo chef-server-ctl restart opscode-erchef"
     srvr.vm.provision "shell", inline: "echo \"data_collector['root_url'] = 'https://automate-deployment.test/data-collector/v0/'\" | sudo tee -a /etc/opscode/chef-server.rb"
     srvr.vm.provision "shell", inline: "echo \"profiles['root_url'] = 'https://automate-deployment.test'\" | sudo tee -a /etc/opscode/chef-server.rb"
