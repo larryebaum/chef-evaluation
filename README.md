@@ -3,6 +3,9 @@ Chef Automate v2.0
 Chef Server
 X Nodes to Bootstrap and manage
 
+This script will create and download all the files needed to
+accomplish the setup.
+
 * !!SPECIAL NOTE!!
 This is running a number of machines on a local environment.  As such,
 it will be memory intensive.  Ensure you have the available resources
@@ -19,8 +22,8 @@ Prereqs:
 Quick Start:
 - Clone this repo and `cd` into it
 - If you have a license, Create ./automate.license and add valid Automate license. Otherwise, skip this, it can be added later.
-- Make files executable `sudo chmod x+ *sh`
-- From the base directory run `./init.sh`
+- Make files executable `sudo chmod x+ chef-infra.sh`
+- From the base directory run `./chef-infra.sh`
 
 
 * For setup details see the step-by-step setup instructions in the Vagrantfile .vm.provision sections
