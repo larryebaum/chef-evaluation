@@ -49,11 +49,31 @@ remove_host() {
 #
 # create local knife config
 #
-do_knife_rb() {
-  echo "Configuring knife.rb..."
-  if [ -f ./.chef/knife.rb ] ; then
-    echo "knife.rb exists.  Nothing to do here."
-  else
+create_base_rb() {
+    mkdir -p ./roles && cat >./roles/base.rb <<EOL
+name "base"
+description "baseline config"
+run_list(
+  "recipe[audit::default]"
+)
+default_attributes(
+  "audit": {
+    "reporter": "chef-server-automate",
+    "profiles": [
+      {
+        "name": "DevSec Linux Security Baseline",
+        "compliance": "admin/linux-baseline"
+      }
+    ]
+  }
+)
+EOL
+}
+
+#
+# create local knife config
+#
+create_knife_rb() {
     mkdir -p .chef && cat >./.chef/knife.rb <<EOL
 current_dir = File.dirname(__FILE__)
 node_name                "admin"
@@ -63,8 +83,6 @@ validation_key           "../.chef/a2-validator.pem"
 chef_server_url          "https://chef-server.test/organizations/a2"
 cookbook_path            ["#{current_dir}/../cookbooks"]
 EOL
-  fi
-  echo "knife.rb complete."
 }
 #
 # create Vagrantfile
@@ -163,7 +181,14 @@ EOL
 #
 do_local_setup() {
   echo "Setting up Host/Local Dev/Workstation..."
-  do_knife_rb
+  echo "Configuring knife.rb..."
+  if [ -f ./.chef/knife.rb ] ; then
+    echo "knife.rb exists.  Nothing to do here."
+  else
+    create_knife_rb
+  fi
+  echo "knife.rb complete."
+
   knife ssl fetch
   knife client list
 
@@ -182,6 +207,14 @@ do_local_setup() {
     fi
   done
   echo "Cookbook upload complete."
+  echo "Uploading Roles..."
+  if [ -f ./roles/base.rb ] ; then
+    echo "base.rb exists.  Nothing to do here."
+  else
+    create_base_rb
+    knife role from file base.rb
+  fi
+  echo "base.rb complete."
   knife cookbook list >/dev/tty 2>&1
   knife status >/dev/tty 2>&1
   echo "setting up Host/Local Dev/Workstation complete."
@@ -311,7 +344,9 @@ do_teardown() {
   echo "remove chef-dk.tar.gz..."
   if ! $is_pre ; then mv -f ./chef-dk.tar.gz ./removing ; fi
   echo "remove ./cookbooks dir..."
-  if ! $is_pre ; then mv -f ./cookbooks ./removing/cookbooks ; fi
+  if ! $is_pre ; then mv -f ./cookbooks ./removing ; fi
+  echo "remove ./roles dir..."
+  if ! $is_pre ; then mv -f ./roles ./removing ; fi
 
 # make sure user really wants to delete if they did
 # not pass cli argument -y
@@ -399,6 +434,8 @@ elif $is_setup ;
 then
   if $is_local ;
   then
+    create_base_rb
+    create_knife_rb
     do_local_setup
     create_vagrantfile 2>/dev/null
   else
