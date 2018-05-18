@@ -10,6 +10,8 @@ usage() {
   echo ""
   echo "setup options: Creat a local Chef Infrastructure"
   echo "-c, --count  TODO not implemented yet - Number of managed nodes to create and bootstrap"
+  echo "-l, --local  Create/overwrite local files only, create Vagrantfile,"
+  echo "              knife.rb, cookbook upload, etc."
   echo ""
   echo "teardown options: Remove files and objects created"
   echo "-h,--help    show this message"
@@ -54,7 +56,7 @@ do_knife_rb() {
   else
     mkdir -p .chef && cat >./.chef/knife.rb <<EOL
 current_dir = File.dirname(__FILE__)
-user = admin
+node_name                "admin"
 client_key               "../.chef/admin.pem"
 validation_client_name   "a2-validator"
 validation_key           "../.chef/a2-validator.pem"
@@ -348,6 +350,7 @@ do_teardown() {
 #
 # initalize default flags
 is_setup=false
+is_local=false
 is_teardown=false
 cnt=2
 is_full=false
@@ -362,6 +365,9 @@ case $i in
     ;;
     teardown)
     is_teardown=true
+    ;;
+    -l|--local)
+    is_local=true
     ;;
     -f|--full)
     is_full=true
@@ -391,7 +397,13 @@ then
   usage
 elif $is_setup ;
 then
-  do_setup
+  if $is_local ;
+  then
+    do_local_setup
+    create_vagrantfile 2>/dev/null
+  else
+    do_setup
+  fi
 elif $is_teardown ;
 then
   do_teardown

@@ -18,6 +18,7 @@ Prereqs:
 - vagrant (tested v2.1.1)
 - vagrant box: bento/ubuntu-16.04
 - vagrant box: archlinux/archlinux
+- chefdk (tested v2.5.3)
 
 Quick Start:
 - Clone this repo and `cd` into it
