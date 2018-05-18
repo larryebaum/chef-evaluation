@@ -17,6 +17,8 @@ Prereqs:
 - Automate License key
 - tested on MacBook Pro w/ 7GB free physical mem
 - a2+chef+2 nodes used 5.2GB memory & 1GB on disk
+
+
 !Warning! This is running a number of machines on a local environment.  As such,
 it is a resource hog. Attention to available resources is advised.
 
