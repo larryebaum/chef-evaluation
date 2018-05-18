@@ -15,12 +15,10 @@ Prereqs:
 - chefdk (tested v2.5.3)
 - WWW Internet access
 - Automate License key
-
-!Warning! This is running a number of machines on a local environment.  As such,
-it is a resource hog. Attention to available resources is advised.
-
 - tested on MacBook Pro w/ 7GB free physical mem
 - a2+chef+2 nodes used 5.2GB memory & 1GB on disk
+!Warning! This is running a number of machines on a local environment.  As such,
+it is a resource hog. Attention to available resources is advised.
 
 
 Quick Start:
@@ -31,14 +29,9 @@ Quick Start:
 - Look at `chef-infra -h` for more info & teardown instructions
 
 Details:
-* Step-by-step setup instructions are best viewed in the Vagrantfile `.vm.provision` sections
-
-create/install a single node only
-- vagrant up [a2|srvr|node1[n]]
-
-retry creation of a single node
-- vagrant provision [a2|srvr|node1[n]]
-
+- Step-by-step setup instructions are best viewed in the Vagrantfile `.vm.provision` sections
+- Create/install a single node only: `vagrant up [a2|srvr|node1[n]]`
+- Retry creation of a single node: `vagrant provision [a2|srvr|node1[n]]`
 
 Development:
 - TODO create Chef Workstation node
