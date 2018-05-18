@@ -21,10 +21,10 @@ Prereqs:
 - chefdk (tested v2.5.3)
 
 Quick Start:
-- Clone this repo and `cd` into it
-- If you have a license, Create ./automate.license and add valid Automate license. Otherwise, skip this, it can be added later.
-- Make files executable `sudo chmod x+ chef-infra.sh`
+- Clone this repo and `cd a2-testing` 
+- Create ./automate.license with a valid Automate license. Otherwise, add it when logging in for the first time
 - From the base directory run `./chef-infra.sh setup`
+- Log in & Download 'DevSec Linux Security Baseline' from the Asset Store
 
 - look at `./chef-infra.sh -h` for more info & teardown instructions
 
@@ -38,3 +38,4 @@ retry creation of a single node
 
 
 #TODO set node cnt in init.sh
+#TODO find a way
