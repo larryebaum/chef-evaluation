@@ -12,6 +12,7 @@ usage() {
   echo "-c, --count  TODO not implemented yet - Number of managed nodes to create and bootstrap"
   echo "-l, --local  Create/overwrite local files only, create Vagrantfile,"
   echo "              knife.rb, cookbook upload, etc."
+  echo "-b, --build  download and build packages only"
   echo ""
   echo "teardown options: Remove files and objects created"
   echo "-h,--help    show this message"
@@ -97,12 +98,12 @@ create_vagrantfile() {
 NODE_COUNT = 10
 
 Vagrant.configure(2) do |config|
-  config.vm.provider "virtualbox" do |v|
-    v.memory = 2048
-    v.cpus = 2
-  end
 
   config.vm.define :a2 do |a2|
+    a2.vm.provider "virtualbox" do |v|
+      v.memory = 2048
+      v.cpus = 2
+    end
     a2.vm.box = "bento/ubuntu-16.04"
     a2.vm.synced_folder ".", "/opt/a2-testing", create: true
     a2.vm.hostname = 'automate-deployment.test'
@@ -120,6 +121,10 @@ Vagrant.configure(2) do |config|
   end
 
   config.vm.define :srvr do |srvr|
+    srvr.vm.provider "virtualbox" do |vb|
+      vb.memory = 1024
+      vb.cpus = 2
+    end
     srvr.vm.box = "bento/ubuntu-16.04"
     srvr.vm.synced_folder ".", "/opt/a2-testing", create: true
     srvr.vm.hostname = 'chef-server.test'
@@ -127,7 +132,8 @@ Vagrant.configure(2) do |config|
     srvr.vm.provision "shell", inline: "apt-get update && apt-get install -y ntp"
     srvr.vm.provision "shell", inline: "echo 192.168.33.199 automate-deployment.test | sudo tee -a /etc/hosts"
     srvr.vm.provision "shell", inline: "echo 192.168.33.200 chef-server.test | sudo tee -a /etc/hosts"
-    srvr.vm.provision "shell", inline: "cd /opt/a2-testing && wget -N -nv https://packages.chef.io/files/stable/chef-server/12.17.33/ubuntu/16.04/chef-server-core_12.17.33-1_amd64.deb && sudo dpkg -i /opt/a2-testing/chef-server-core*.deb && chef-server-ctl reconfigure"
+    # srvr.vm.provision "shell", inline: "cd /opt/a2-testing && wget -N -nv https://packages.chef.io/files/stable/chef-server/12.17.33/ubuntu/16.04/chef-server-core_12.17.33-1_amd64.deb && sudo dpkg -i /opt/a2-testing/chef-server-core*.deb && chef-server-ctl reconfigure"
+    srvr.vm.provision "shell", inline: "sudo dpkg -i /opt/a2-testing/pkgs/chef-server-core*.deb && chef-server-ctl reconfigure"
     srvr.vm.provision "shell", inline: "mkdir -p /opt/a2-testing/.chef"
     srvr.vm.provision "shell", inline: "if [ \"\$(sudo chef-server-ctl user-show | grep 'admin')\" == \"\" ]; then sudo chef-server-ctl user-create admin first last admin@example.com 'adminpwd' --filename /opt/a2-testing/.chef/admin.pem; fi"
     srvr.vm.provision "shell", inline: "if [ \"\$(sudo chef-server-ctl org-show | grep 'a2')\" == \"\" ]; then sudo chef-server-ctl org-create a2 'automate2' --association_user admin --filename /opt/a2-testing/.chef/a2-validator.pem; fi"
@@ -153,9 +159,9 @@ Vagrant.configure(2) do |config|
       node.vm.provision "shell", inline: "echo 192.168.33.200 chef-server.test | sudo tee -a /etc/hosts"
       node.vm.provision "shell", inline: "echo 192.168.33.1#{i} #{node_id}.test | sudo tee -a /etc/hosts"
       node.vm.provision "shell", inline: "sudo pacman -Sy --noconfirm wget binutils fakeroot cronie ntp"
-      node.vm.provision "shell", inline: "sudo -H -u vagrant bash -c 'cd /opt/a2-testing && wget -N -nv https://aur.archlinux.org/cgit/aur.git/snapshot/chef-dk.tar.gz && tar -xvzf *.tar.gz'"
-      node.vm.provision "shell", inline: "if [ \"\$(ls /opt/a2-testing/chef-dk/chef*xz)\" == \"\" ]; then sudo -H -u vagrant bash -c 'cd /opt/a2-testing/chef-dk && makepkg -s'; fi"
-      node.vm.provision "shell", inline: "cd /opt/a2-testing/chef-dk && sudo pacman -U --noconfirm *xz"
+      # node.vm.provision "shell", inline: "sudo -H -u vagrant bash -c 'cd /opt/a2-testing && wget -N -nv https://aur.archlinux.org/cgit/aur.git/snapshot/chef-dk.tar.gz && tar -xvzf *.tar.gz'"
+      # node.vm.provision "shell", inline: "if [ \"\$(ls /opt/a2-testing/chef-dk/chef*xz)\" == \"\" ]; then sudo -H -u vagrant bash -c 'cd /opt/a2-testing/chef-dk && makepkg -s'; fi"
+      node.vm.provision "shell", inline: "cd /opt/a2-testing/pkgs/chef-dk && sudo pacman -U --noconfirm *xz"
       node.vm.provision "shell", inline: "sudo mkdir -p /etc/chef && cat >/etc/chef/client.rb <<EOL
 log_level        :info
 log_location     STDOUT
@@ -172,8 +178,61 @@ EOL"
     end
   end
 
+  config.vm.define :chefdk do |chefdk|
+    chefdk.vm.provider "virtualbox" do |vb|
+      vb.memory = 1024
+      vb.cpus = 2
+    end
+    chefdk.vm.box = "archlinux/archlinux"
+    chefdk.vm.hostname = "chefdk.test"
+    chefdk.vm.synced_folder ".", "/opt/a2-testing", create: true
+    chefdk.vm.network :private_network, ip: "192.168.33.66"
+    chefdk.ssh.username = "vagrant"
+    chefdk.ssh.password = "vagrant"
+    chefdk.vm.provision "shell", inline: "sudo pacman -Sy --noconfirm wget binutils fakeroot"
+    chefdk.vm.provision "shell", inline: "mkdir -p /opt/a2-testing/pkgs"
+    chefdk.vm.provision "shell", inline: "sudo -H -u vagrant bash -c 'cd /opt/a2-testing/pkgs && wget -N -nv https://aur.archlinux.org/cgit/aur.git/snapshot/chef-dk.tar.gz && tar -xvzf *.tar.gz'"
+    chefdk.vm.provision "shell", inline: "if [ \"\$(ls /opt/a2-testing/pkgs/chef-dk/chef*xz)\" == \"\" ]; then sudo -H -u vagrant bash -c 'cd /opt/a2-testing/pkgs/chef-dk && makepkg -s'; fi"
+  end
 end
 EOL
+}
+
+do_build() {
+  pids=""
+  # TODO use latest stable url
+  mkdir -p pkgs
+  if [ ! -f ./pkgs/chef-server*.deb ] ;
+  then
+    echo "Download chef-server-core .deb package..."
+    (curl https://packages.chef.io/files/stable/chef-server/12.17.33/ubuntu/16.04/chef-server-core_12.17.33-1_amd64.deb > ./pkgs/chef-server-core.deb) &
+    pids="$pids $!"
+  fi
+  if [ ! -f ./pkgs/chef-dk/chef*xz ] ;
+  then
+    echo "Download and build chef-dk for archlinux..."
+    (vagrant up chefdk) &
+    pids="$pids $!"
+  fi
+  wait $pids
+  # cleanup
+  #if [ -f /opt/a2-testing/pkgs/chef-dk/chef*xz ] ; then rm -f /pkgs/chef-dk.tar.gz; fi
+  if [ ! "vagrant status chefdk | grep 'running (virtualbox)'" == "" ] ; then vagrant destroy chefdk -f; fi
+}
+
+create_helpers() {
+  cat > rm-node <<EOL
+#!/bin/bash
+if [ "\$1" == "" ] ;
+then
+  echo "Specify a node name"
+  exit
+fi
+knife node delete \$1
+knife client delete \$1
+vagrant destroy \$1 -f
+EOL
+  chmod +x rm-node
 }
 
 #
@@ -297,6 +356,7 @@ do_setup() {
   do_automate_setup
   do_chef_server_setup
   do_local_setup
+  do_build
   do_node_setup $cnt
   #init_test
   # wrap up and repeat the user instructions that are buried in the logs
@@ -305,7 +365,7 @@ do_setup() {
   echo "To login to Chef Automate, use the following credentials"
   echo "        URL: https://automate-deployment.test to try Chef Automate"
   echo "        User: admin"
-  vagrant ssh a2 -c "sudo ./chef-automate config show | grep 'password'" >/dev/tty 2>&1
+  vagrant ssh a2 -c "sudo cat config.toml | grep 'password'" >/dev/tty 2>&1
   echo ""
   echo "cleanup using chef-infra teardown"
   echo ""
@@ -320,6 +380,8 @@ do_snapshot() {
 do_teardown() {
   echo "Begin Chef Infrastructure teardown"
   if $is_pre ; then echo "-p specified. Only printing actions of this script..." ; fi
+  echo "create temporary removing dir..."
+  if ! $is_pre ; then mkdir -p removing ; fi
 
   remove_host automate-deployment.test $is_pre
   remove_host chef-server.test $is_pre
@@ -329,24 +391,18 @@ do_teardown() {
     echo "clear contents of add.license.etc..."
     echo "delete binaries ./chef-dk, *.deb and Backups..."
     if ! $is_pre ; then
-      # file containing automate license
-      cp automate.license ./removing
-      echo "" > automate.license
       # directory containing compiled archlinux chef-dk package
-      mv ./chef-dk ./removing
-      mv *.deb ./removing
+      mv ./pkgs ./removing
       mv ./bkps ./removing
     fi
+    echo "delete helper scripts..."
+    if ! $is_pre ; then mv rm-node ./removing ; fi
   fi
 
-  echo "create temporary removing dir..."
-  if ! $is_pre ; then mkdir -p removing ; fi
   echo "remove token file..."
   if ! $is_pre ; then mv -f a2-token ./removing ; fi
   echo "remove files from .chef..."
   if ! $is_pre ; then mv -f ./.chef ./removing ; fi
-  echo "remove chef-dk.tar.gz..."
-  if ! $is_pre ; then mv -f ./chef-dk.tar.gz ./removing ; fi
   echo "remove ./cookbooks dir..."
   if ! $is_pre ; then mv -f ./cookbooks ./removing ; fi
   echo "remove ./roles dir..."
@@ -375,7 +431,7 @@ do_teardown() {
   echo "remove Vagrantfile..."
   if ! $is_pre ; then rm -f Vagrantfile ./removing ; fi
   echo "remove ./vagrant dir..."
-  if ! $is_pre ; then mv -f ./.vagrant ./removing/.vagrant ; fi
+  if ! $is_pre ; then mv -f ./.vagrant ./removing ; fi
   echo "nuke the temporary ./removing dir..."
   if ! $is_pre ; then rm -rf ./removing ; fi
 
@@ -383,13 +439,14 @@ do_teardown() {
   echo "Teardown of Chef Infrastructure complete. Thanks for playing... :)"
 }
 
-
+#TODO refactor arguments with getops
 #
 # Begin chef-infra.sh
 #
 # initalize default flags
 is_setup=false
 is_local=false
+is_build=false
 is_teardown=false
 cnt=2
 is_full=false
@@ -407,6 +464,9 @@ case $i in
     ;;
     -l|--local)
     is_local=true
+    ;;
+    -b|--build)
+    is_build=true
     ;;
     -f|--full)
     is_full=true
@@ -444,6 +504,10 @@ then
     create_base_rb
     knife role from file base.rb
     create_vagrantfile 2>/dev/null
+    create_helpers
+  elif [[ condition ]]; then
+    create_vagrantfile 2>/dev/null
+    do_build
   else
     do_setup
   fi

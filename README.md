@@ -37,6 +37,8 @@ Details:
 
 Development:
 - TODO create Chef Workstation node
+- TODO evaluate hab chef-server & chef-client
+- TODO snapshot/recover functionality
 - TODO move chef-dk, .deb to ./bin
 - TODO set node cnt in init.sh
 - TODO cli cmd for loading profiles in automate
