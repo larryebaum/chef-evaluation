@@ -204,7 +204,7 @@ do_build() {
   mkdir -p pkgs
   if [ ! -f ./pkgs/chef-server*.deb ] ;
   then
-    echo "Download chef-server-core .deb package..."
+    echo "Download chef-server-core*.deb package..."
     (curl https://packages.chef.io/files/stable/chef-server/12.17.33/ubuntu/16.04/chef-server-core_12.17.33-1_amd64.deb > ./pkgs/chef-server-core.deb) &
     pids="$pids $!"
   fi
@@ -353,10 +353,10 @@ do_setup() {
     create_vagrantfile 2>/dev/null
   fi
   echo "Vagrantfile complete."
+  do_build
   do_automate_setup
   do_chef_server_setup
   do_local_setup
-  do_build
   do_node_setup $cnt
   #init_test
   # wrap up and repeat the user instructions that are buried in the logs
@@ -505,7 +505,7 @@ then
     knife role from file base.rb
     create_vagrantfile 2>/dev/null
     create_helpers
-  elif [[ condition ]]; then
+  elif $is_build ; then
     create_vagrantfile 2>/dev/null
     do_build
   else
