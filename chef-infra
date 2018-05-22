@@ -166,11 +166,11 @@ Vagrant.configure(2) do |config|
     srvr.ssh.password = "vagrant"
     srvr.vm.provision "shell", inline: "echo 192.168.33.199 automate-deployment.test | sudo tee -a /etc/hosts"
     srvr.vm.provision "shell", inline: "echo 192.168.33.200 chef-server.test | sudo tee -a /etc/hosts"
-    srvr.vm.provision "shell", inline: "sudo pacman -Sy --noconfirm binutils fakeroot cronie ntp"
+    srvr.vm.provision "shell", inline: "sudo pacman -Sy --noconfirm fakeroot cronie ntp"
     srvr.vm.provision "shell", inline: "cd ${GUEST_WKDIR}/pkgs/chef-server && sudo pacman -U --noconfirm *xz && sudo chef-server-ctl reconfigure"
     srvr.vm.provision "shell", inline: "if [ \"\$(sudo chef-server-ctl user-show | grep 'admin')\" == \"\" ]; then sudo chef-server-ctl user-create admin first last admin@example.com 'adminpwd' --filename ${GUEST_WKDIR}/.chef/admin.pem; fi"
     srvr.vm.provision "shell", inline: "if [ \"\$(sudo chef-server-ctl org-show | grep 'a2')\" == \"\" ]; then sudo chef-server-ctl org-create a2 'automate2' --association_user admin --filename ${GUEST_WKDIR}/.chef/a2-validator.pem; fi"
-    srvr.vm.provision "shell", inline: "while [ ! -f ${GUEST_WKDIR}/a2-token ] ; do sleep 5 && echo "." ; done && sudo chef-server-ctl set-secret data_collector token \$(< ${GUEST_WKDIR}/a2-token) && sudo chef-server-ctl restart nginx && sudo chef-server-ctl restart opscode-erchef"
+    srvr.vm.provision "shell", inline: "while [ ! -f ${GUEST_WKDIR}/a2-token ] ; do sleep 5 && echo '.'; done && sudo chef-server-ctl set-secret data_collector token \$(< ${GUEST_WKDIR}/a2-token) && sudo chef-server-ctl restart nginx && sudo chef-server-ctl restart opscode-erchef"
     srvr.vm.provision "shell", inline: "echo \"data_collector['root_url'] = 'https://automate-deployment.test/data-collector/v0/'\" | sudo tee -a /etc/opscode/chef-server.rb"
     srvr.vm.provision "shell", inline: "echo \"profiles['root_url'] = 'https://automate-deployment.test'\" | sudo tee -a /etc/opscode/chef-server.rb"
     srvr.vm.provision "shell", inline: "sudo chef-server-ctl reconfigure"
@@ -353,54 +353,7 @@ do_node_setup() {
   done
   echo "Managed nodes set up complete."
 }
-#
-# set up Chef Server vm
-#
-do_chef_server_setup() {
-  echo "Setting up Chef Server..."
-  if [ "$(vagrant status srvr | grep 'running (virtualbox)')" == "" ];
-  then
-    echo "vagrant up Chef Server..."
-    vagrant up srvr >/dev/tty 2>&1
-  else
-    echo "Chef Server is running.  Checking status..."
-    if [ "$(vagrant ssh srvr -c 'sudo chef-server-ctl status')" == "" ];
-    then
-      echo "No response from chef-server-ctl. running vagrant provision..."
-      vagrant provision srvr >/dev/tty 2>&1
-    else
-      echo "chef-server-ctl returns status. Nothing to do here."
-    fi
-  fi
-  add_host 192.168.33.200 chef-server.test
-  echo "Chef Server set up complete."
-}
-#
-# set up Automate vm
-#
-do_automate_setup() {
-echo "Setting up Automate..."
-  if [ "$(vagrant status a2 | grep 'running (virtualbox)')" == "" ];
-  then
-    echo "vagrant up automate..."
-    # clean up any last_run leftovers that will get in the way
-    rm -f a2-token
-    vagrant up a2 >/dev/tty 2>&1
-    # check for token
-  else
-    echo "Automate is running.  Nothing to do here."
-  fi
-  if [ ! -f ./a2-token ] ;
-  then
-    do_error "a2-token doesn't exist"
-  fi
-  add_host 192.168.33.199 automate-deployment.test
 
-  #make baseline available
-  #post:{name: "apache-baseline", version: "2.0.2"}
-  #to:https://automate-deployment.test/api/v0/compliance/profiles?owner=admin
-  echo "Automate set up complete."
-}
 #
 # test setup
 do_test() {
@@ -426,11 +379,34 @@ do_setup() {
     create_vagrantfile 2>/dev/null
   fi
   echo "Vagrantfile complete."
+  # add chef dir here
+  mkdir -p ./.chef
   do_build
-  do_automate_setup &
-  do_chef_server_setup &
-  # let Chef Server and Automate complete
+  echo "Setting up Automate and Chef Server..."
+  # Check status of Automate
+  a2_mode='provision'
+  if [ "$(vagrant status a2 | grep 'running (virtualbox)')" == "" ]; then a2_mode='up' ; fi
+  # Check status of Chef Server
+  srvr_mode='provision'
+  if [ "$(vagrant status srvr | grep 'running (virtualbox)')" == "" ]; then srvr_mode='up' ; fi
+  # clean up any last_run leftovers that will get in the way
+  #vagrant $a2_mode a2 >/dev/tty 2>&1 &
+  #vagrant $srvr_mode srvr >/dev/tty 2>&1 &
+  vagrant $a2_mode a2 >/dev/tty 2>&1 &
+  vagrant $srvr_mode srvr >/dev/tty 2>&1 &
   wait
+
+  if [ ! -f ./a2-token ] ; then do_error "a2-token doesn't exist"; fi
+  add_host 192.168.33.200 chef-server.test
+  add_host 192.168.33.199 automate-deployment.test
+  echo "Automate and Chef Server set up complete."
+
+  # TODO make baseline profile available
+  #this is how you can make baseline profile available to the nodes in automate
+  #post:{name: "apache-baseline", version: "2.0.2"}
+  #to:https://automate-deployment.test/api/v0/compliance/profiles?owner=admin
+  # let Chef Server and Automate complete
+
   do_local_setup
   do_node_setup $cnt
   #init_test

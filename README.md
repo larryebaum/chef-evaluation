@@ -1,4 +1,4 @@
-Purpose: Stand up an Automate v2.0 evaluation environment
+Purpose: Stand up an Automate v2.0 evaluation environment (aka: YACv?, Yet Another Chef server setup)
 - Chef Automate v2.0
 - Chef Server (Manage-less)
 - X Nodes to Bootstrap and manage
