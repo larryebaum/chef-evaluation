@@ -3,40 +3,57 @@
 # Purpose: Stand up an Automate v2.0 evaluation environment
 
 #
+# Static Variables
+#
+GUEST_WKDIR='/opt/a2-testing'
+#
 # helper functions
 #
 usage() {
-  echo "Usage: $0 [setup|build|backup|restore|teardown] [options]"
+  echo "Usage: $0 [command] [options]"
+  echo ""
+  echo "Available Commands:"
+  echo "    setup"
+  echo "    build"
+  echo "    backup"
+  echo "    restore"
+  echo "    teardown"
+  echo "    troubleshoot"
   echo ""
   echo "-h,--help    show this message"
   echo ""
-  echo "setup options: Creat a local Chef Infrastructure"
+  echo "setup: Creat a local Chef Infrastructure"
+  echo "Available options"
   echo "-c, --count requires an integer. Number of nodes to include in the fleet (default: 2)"
   echo ""
-  echo "build options: Compile binaries"
+  echo "build: Compile binaries"
   echo "-f, --force remove current packages and re-build"
   echo "-l, --local Create/overwrite local files only, create Vagrantfile,"
   echo "              knife.rb, cookbook upload, etc."
   echo ""
-  echo "backup options: create snapshots of Automate and Chef Server"
-  echo " none"
+  echo "backup: create snapshots of Automate and Chef Server"
   echo ""
-  echo "restore options: Restore to the latest backup, if one exists"
+  echo "restore: Restore to the latest backup, if one exists"
   echo "-s, --server Path to Chef server backup (default: latest file)"
   echo "-a, --automate Path to Automate backup (default: latest file)"
   echo ""
-  echo "teardown options: Remove files and objects created"
+  echo "teardown: Remove files and objects created"
   echo "-p,--pretend just list what will be done"
   echo "-f,--full    Remove .deb packages. The process downloads and creates .deb"
   echo "             packages. For convienience and speed, these are not removed"
   echo "             by default."
-  echo "-y,--yes     answer yes to all prompts"; exit 1;
+  echo "-y,--yes     answer yes to all prompts";
+  echo ""
+  echo "troubleshoot: Print useful cmds"
+
+  exit 1;
 }
 
 do_error() {
   echo ""
+  echo "ERROR: ${1}"
   echo ""
-  echo "${RED}ERROR: ${1}${NC}"
+  echo ""
   exit 1
 }
 #
@@ -63,12 +80,6 @@ remove_host() {
     echo "$1 was not found in /etc/hosts"
   fi
 }
-#
-# Static Variables
-#
-RED='\033[0;31m'
-NC='\033[0m'
-GUEST_WKDIR='/opt/a2-testing'
 #
 # create local knife config
 #
@@ -159,7 +170,7 @@ Vagrant.configure(2) do |config|
     srvr.vm.provision "shell", inline: "cd ${GUEST_WKDIR}/pkgs/chef-server && sudo pacman -U --noconfirm *xz && sudo chef-server-ctl reconfigure"
     srvr.vm.provision "shell", inline: "if [ \"\$(sudo chef-server-ctl user-show | grep 'admin')\" == \"\" ]; then sudo chef-server-ctl user-create admin first last admin@example.com 'adminpwd' --filename ${GUEST_WKDIR}/.chef/admin.pem; fi"
     srvr.vm.provision "shell", inline: "if [ \"\$(sudo chef-server-ctl org-show | grep 'a2')\" == \"\" ]; then sudo chef-server-ctl org-create a2 'automate2' --association_user admin --filename ${GUEST_WKDIR}/.chef/a2-validator.pem; fi"
-    srvr.vm.provision "shell", inline: "sudo chef-server-ctl set-secret data_collector token \$(< ${GUEST_WKDIR}/a2-token) && sudo chef-server-ctl restart nginx && sudo chef-server-ctl restart opscode-erchef"
+    srvr.vm.provision "shell", inline: "while [ ! -f ${GUEST_WKDIR}/a2-token ] ; do sleep 5 && echo "." ; done && sudo chef-server-ctl set-secret data_collector token \$(< ${GUEST_WKDIR}/a2-token) && sudo chef-server-ctl restart nginx && sudo chef-server-ctl restart opscode-erchef"
     srvr.vm.provision "shell", inline: "echo \"data_collector['root_url'] = 'https://automate-deployment.test/data-collector/v0/'\" | sudo tee -a /etc/opscode/chef-server.rb"
     srvr.vm.provision "shell", inline: "echo \"profiles['root_url'] = 'https://automate-deployment.test'\" | sudo tee -a /etc/opscode/chef-server.rb"
     srvr.vm.provision "shell", inline: "sudo chef-server-ctl reconfigure"
@@ -237,16 +248,7 @@ EOL
 
 do_build() {
   pids=""
-  # TODO use latest stable url
   mkdir -p pkgs
-##################
-#  if [ ! -f ./pkgs/chef-server*.deb ] ;
-#  then
-#    echo "Download chef-server-core*.deb package..."
-#    (curl https://packages.chef.io/files/stable/chef-server/12.17.33/ubuntu/16.04/chef-server-core_12.17.33-1_amd64.deb > ./pkgs/chef-server-core.deb) &
-#    pids="$pids $!"
-#  fi
-##################
   # stand up a vm to build chef server
   if [ ! -f ./pkgs/chef-server/chef*xz ] ;
   then
@@ -350,7 +352,6 @@ do_node_setup() {
     add_host 192.168.33.1$i node1$i.test
   done
   echo "Managed nodes set up complete."
-
 }
 #
 # set up Chef Server vm
@@ -360,11 +361,10 @@ do_chef_server_setup() {
   if [ "$(vagrant status srvr | grep 'running (virtualbox)')" == "" ];
   then
     echo "vagrant up Chef Server..."
-    #clean up any last_run leftovers that will get in the way
     vagrant up srvr >/dev/tty 2>&1
   else
     echo "Chef Server is running.  Checking status..."
-    if [ "$(vagrant ssh srvr -c 'sudo chef-server-ctl status')" == ];
+    if [ "$(vagrant ssh srvr -c 'sudo chef-server-ctl status')" == "" ];
     then
       echo "No response from chef-server-ctl. running vagrant provision..."
       vagrant provision srvr >/dev/tty 2>&1
@@ -392,26 +392,26 @@ echo "Setting up Automate..."
   fi
   if [ ! -f ./a2-token ] ;
   then
-    echo "${RED}**********************************${NC}"
-    echo "${RED}ERROR: a2-token doesn't exist${NC}"
-    echo "${RED}**********************************${NC}"
-    break
+    do_error "a2-token doesn't exist"
   fi
   add_host 192.168.33.199 automate-deployment.test
+
+  #make baseline available
+  #post:{name: "apache-baseline", version: "2.0.2"}
+  #to:https://automate-deployment.test/api/v0/compliance/profiles?owner=admin
   echo "Automate set up complete."
 }
 #
 # test setup
 do_test() {
   # check for local setup
-  if [ ! -f ./.chef/knife.rb ] ; then echo "${RED}ERROR: knife.rb doesn't exist${NC}" ; fi
+  if [ ! -f ./.chef/knife.rb ] ; then do_error "knife.rb doesn't exist" ; fi
   # test for a functioning chef-server
-  if [[ "$(vagrant ssh srvr -c 'hostname -f')" != "chef-server.test" ]] ; then echo "${RED}ERROR: chef-server setup not complete${NC}" ; fi
+  if [[ "$(vagrant ssh srvr -c 'hostname -f')" != "chef-server.test" ]] ; then do_error "chef-server setup not complete" ; fi
   # test for a functioning automate
-  if [[ "$(vagrant ssh srvr -c 'hostname -f')" != "automate-deployment.test" ]] ; then echo "${RED}ERROR: chef-server setup not complete${NC}" ; fi
+  if [[ "$(vagrant ssh srvr -c 'hostname -f')" != "automate-deployment.test" ]] ; then do_error "chef-server setup not complete" ; fi
   # test for a bootstrapped node
 }
-
 #
 # Begin setup
 # the purpose of this file is to be the entry point for setting up a
@@ -427,8 +427,10 @@ do_setup() {
   fi
   echo "Vagrantfile complete."
   do_build
-  do_automate_setup
-  do_chef_server_setup
+  do_automate_setup &
+  do_chef_server_setup &
+  # let Chef Server and Automate complete
+  wait
   do_local_setup
   do_node_setup $cnt
   #init_test
@@ -458,8 +460,8 @@ do_backup() {
 
 do_restore() {
   # restore chef Server
-  if [ $srvr_bak == "" ]; then srvr_bak=`ls -qaltr ./bkps/srvr| tail -1` ; fi
-  if [ $a2_bak == "" ]; then a2_bak=`ls -qaltr ./bkps/a2| tail -1` ; fi
+  if [ "x$srvr_bak" = "x" ]; then srvr_bak=`ls -tr ./bkps/srvr | tail -1` ; fi
+  if [ "x$a2_bak" = "x" ]; then a2_bak=`ls -tr ./bkps/a2 | tail -1` ; fi
   if [ ! -d $srvr_bak ]; then do_error "Chef Server Backup does not exist. Look in ./bkps and try again." ; fi
   if [ ! -d $a2_bak ]; then do_error "Automate Backup does not exist. Look in ./bkps and try again." ; fi
   vagrant ssh srvr -c "sudo knife ssl fetch https://chef-server.test && sudo /opt/opscode/embedded/bin/knife ec restore ${GUEST_WKDIR}/bkps/srvr/${srvr_bak} -s https://chef-server.test --user pivotal --key /etc/opscode/pivotal.pem"
@@ -526,6 +528,14 @@ do_teardown() {
 
   echo " "
   echo "Teardown of Chef Infrastructure complete. Thanks for playing... :)"
+}
+
+do_troubleshoot() {
+  echo ""
+  echo "Helpful troubleshooting"
+  echo ""
+  echo "View Automate Log: journalctl -u chef-automate"
+  echo "Tail Automate Log: journalctl -u chef-automate -f"
 }
 
 #
@@ -628,6 +638,9 @@ case $1 in
       esac
     done
     do_teardown
+    ;;
+  troubleshoot )
+    do_troubleshoot
     ;;
   * )
     usage
