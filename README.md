@@ -16,7 +16,7 @@ Prereqs:
 - WWW Internet access
 - Automate License key
 - tested on MacBook Pro w/ 7GB free physical mem
-- a2+chef+2 nodes used 5.2GB memory & 1GB on disk
+- a2+chef+2 nodes used 4GB memory & 1GB on disk
 
 
 !Warning! This is running a number of machines on a local environment.  As such,
@@ -30,7 +30,14 @@ Quick Start:
 - Log in & Download 'DevSec Linux Security Baseline' from the Asset Store
 - Look at `chef-infra -h` for more info & teardown instructions
 
+
+
 Details:
+Ideally, `chef-infra setup` will "just work" and give you everything required.  However, this isn't a perfect world.  If things don't work here are a few things to try.
+1. Did a2 converge w/out error? Does ./a2-token exist? If no, try `vagrant provision a2`
+1. Did srvr converge w/out error? Does ./.chef/admin.pem exist? If no, try `vagrant provision srvr`
+1. Did nodeX converge w/out error? If no, check status of a2 and srvr.  Try `knife ssl fetch && knife cookbook upload audit && knife role from file base.rb`.  Was the DevSec profile added to Automate? If no, log in and do that.
+
 - Step-by-step setup instructions are best viewed in the Vagrantfile `.vm.provision` sections
 - Create/install a single node only: `vagrant up [a2|srvr|node1[n]]`
 - Retry creation of a single node: `vagrant provision [a2|srvr|node1[n]]`
