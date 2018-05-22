@@ -5,6 +5,8 @@
 .chef/*
 .vagrant
 .vagrant/*
+bkps
+bkps/*
 cookbooks
 cookbooks/*
 pkgs

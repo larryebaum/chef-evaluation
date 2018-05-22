@@ -6,16 +6,23 @@
 # helper functions
 #
 usage() {
-  echo "Usage: $0 [setup|teardown] [options]"
+  echo "Usage: $0 [setup|backup|restore|teardown] [options]"
+  echo ""
+  echo "-h,--help    show this message"
   echo ""
   echo "setup options: Creat a local Chef Infrastructure"
-  echo "-c, --count  TODO not implemented yet - Number of managed nodes to create and bootstrap"
-  echo "-l, --local  Create/overwrite local files only, create Vagrantfile,"
+  echo "-c, --count Number of nodes to include in the fleet (default: 2)"
+  echo "-b, --build download and build packages only "
+  echo "-l, --local Create/overwrite local files only, create Vagrantfile,"
   echo "              knife.rb, cookbook upload, etc."
-  echo "-b, --build  download and build packages only"
+  echo ""
+  echo "backup options: create snapshots of Automate and Chef Server"
+  echo " none"
+  echo ""
+  echo "restore options: Restore to the latest backup, if one exists"
+  echo " none"
   echo ""
   echo "teardown options: Remove files and objects created"
-  echo "-h,--help    show this message"
   echo "-p,--pretend just list what will be done"
   echo "-f,--full    Remove .deb packages. The process downloads and creates .deb"
   echo "             packages. For convienience and speed, these are not removed"
@@ -46,7 +53,12 @@ remove_host() {
     echo "$1 was not found in /etc/hosts"
   fi
 }
-
+#
+# Static Variables
+#
+RED='\033[0;31m'
+NC='\033[0m'
+GUEST_WKDIR='/opt/a2-testing'
 #
 # create local knife config
 #
@@ -105,7 +117,7 @@ Vagrant.configure(2) do |config|
       v.cpus = 2
     end
     a2.vm.box = "bento/ubuntu-16.04"
-    a2.vm.synced_folder ".", "/opt/a2-testing", create: true
+    a2.vm.synced_folder ".", "${GUEST_WKDIR}", create: true
     a2.vm.hostname = 'automate-deployment.test'
     a2.vm.network 'private_network', ip: '192.168.33.199'
     a2.vm.boot_timeout = 600
@@ -115,29 +127,29 @@ Vagrant.configure(2) do |config|
     a2.vm.provision "shell", inline: "echo 192.168.33.199 automate-deployment.test | sudo tee -a /etc/hosts"
     a2.vm.provision "shell", inline: "cd /home/vagrant && curl https://packages.chef.io/files/current/automate/latest/chef-automate_linux_amd64.zip |gunzip - > chef-automate && chmod +x chef-automate"
     a2.vm.provision "shell", inline: "sudo ./chef-automate init-config"
-    a2.vm.provision "shell", inline: "sudo ./chef-automate deploy config.toml --skip-preflight"
-    a2.vm.provision "shell", inline: "if [ -f /opt/a2-testing/automate.license ]; then sudo ./chef-automate license apply \$(< /opt/a2-testing/automate.license) && sudo ./chef-automate license status ; fi"
-    a2.vm.provision "shell", inline: "sudo ./chef-automate admin-token > /opt/a2-testing/a2-token"
+    a2.vm.provision "shell", inline: "sudo ./chef-automate deploy config.toml --accept-terms-and-mlsa --skip-preflight"
+    a2.vm.provision "shell", inline: "if [ -f ${GUEST_WKDIR}/automate.license ]; then sudo ./chef-automate license apply \$(< ${GUEST_WKDIR}/automate.license) && sudo ./chef-automate license status ; fi"
+    a2.vm.provision "shell", inline: "sudo ./chef-automate admin-token > ${GUEST_WKDIR}/a2-token"
   end
 
   config.vm.define :srvr do |srvr|
     srvr.vm.provider "virtualbox" do |vb|
-      vb.memory = 1024
+      vb.memory = 512
       vb.cpus = 2
     end
-    srvr.vm.box = "bento/ubuntu-16.04"
-    srvr.vm.synced_folder ".", "/opt/a2-testing", create: true
-    srvr.vm.hostname = 'chef-server.test'
-    srvr.vm.network 'private_network', ip: '192.168.33.200'
-    srvr.vm.provision "shell", inline: "apt-get update && apt-get install -y ntp"
+    srvr.vm.box = "archlinux/archlinux"
+    srvr.vm.hostname = "chef-server.test"
+    srvr.vm.synced_folder ".", "${GUEST_WKDIR}", create: true
+    srvr.vm.network :private_network, ip: "192.168.33.200"
+    srvr.ssh.username = "vagrant"
+    srvr.ssh.password = "vagrant"
     srvr.vm.provision "shell", inline: "echo 192.168.33.199 automate-deployment.test | sudo tee -a /etc/hosts"
     srvr.vm.provision "shell", inline: "echo 192.168.33.200 chef-server.test | sudo tee -a /etc/hosts"
-    # srvr.vm.provision "shell", inline: "cd /opt/a2-testing && wget -N -nv https://packages.chef.io/files/stable/chef-server/12.17.33/ubuntu/16.04/chef-server-core_12.17.33-1_amd64.deb && sudo dpkg -i /opt/a2-testing/chef-server-core*.deb && chef-server-ctl reconfigure"
-    srvr.vm.provision "shell", inline: "sudo dpkg -i /opt/a2-testing/pkgs/chef-server-core*.deb && chef-server-ctl reconfigure"
-    srvr.vm.provision "shell", inline: "mkdir -p /opt/a2-testing/.chef"
-    srvr.vm.provision "shell", inline: "if [ \"\$(sudo chef-server-ctl user-show | grep 'admin')\" == \"\" ]; then sudo chef-server-ctl user-create admin first last admin@example.com 'adminpwd' --filename /opt/a2-testing/.chef/admin.pem; fi"
-    srvr.vm.provision "shell", inline: "if [ \"\$(sudo chef-server-ctl org-show | grep 'a2')\" == \"\" ]; then sudo chef-server-ctl org-create a2 'automate2' --association_user admin --filename /opt/a2-testing/.chef/a2-validator.pem; fi"
-    srvr.vm.provision "shell", inline: "sudo chef-server-ctl set-secret data_collector token \$(< /opt/a2-testing/a2-token) && sudo chef-server-ctl restart nginx && sudo chef-server-ctl restart opscode-erchef"
+    srvr.vm.provision "shell", inline: "sudo pacman -Sy --noconfirm binutils fakeroot cronie ntp"
+    srvr.vm.provision "shell", inline: "cd ${GUEST_WKDIR}/pkgs/chef-server && sudo pacman -U --noconfirm *xz && sudo chef-server-ctl reconfigure"
+    srvr.vm.provision "shell", inline: "if [ \"\$(sudo chef-server-ctl user-show | grep 'admin')\" == \"\" ]; then sudo chef-server-ctl user-create admin first last admin@example.com 'adminpwd' --filename ${GUEST_WKDIR}/.chef/admin.pem; fi"
+    srvr.vm.provision "shell", inline: "if [ \"\$(sudo chef-server-ctl org-show | grep 'a2')\" == \"\" ]; then sudo chef-server-ctl org-create a2 'automate2' --association_user admin --filename ${GUEST_WKDIR}/.chef/a2-validator.pem; fi"
+    srvr.vm.provision "shell", inline: "sudo chef-server-ctl set-secret data_collector token \$(< ${GUEST_WKDIR}/a2-token) && sudo chef-server-ctl restart nginx && sudo chef-server-ctl restart opscode-erchef"
     srvr.vm.provision "shell", inline: "echo \"data_collector['root_url'] = 'https://automate-deployment.test/data-collector/v0/'\" | sudo tee -a /etc/opscode/chef-server.rb"
     srvr.vm.provision "shell", inline: "echo \"profiles['root_url'] = 'https://automate-deployment.test'\" | sudo tee -a /etc/opscode/chef-server.rb"
     srvr.vm.provision "shell", inline: "sudo chef-server-ctl reconfigure"
@@ -152,22 +164,22 @@ Vagrant.configure(2) do |config|
       end
       node.vm.box = "archlinux/archlinux"
       node.vm.hostname = "#{node_id}.test"
-      node.vm.synced_folder ".", "/opt/a2-testing", create: true
+      node.vm.synced_folder ".", "${GUEST_WKDIR}", create: true
       node.vm.network :private_network, ip: "192.168.33.1#{i}"
       node.ssh.username = "vagrant"
       node.ssh.password = "vagrant"
       node.vm.provision "shell", inline: "echo 192.168.33.200 chef-server.test | sudo tee -a /etc/hosts"
       node.vm.provision "shell", inline: "echo 192.168.33.1#{i} #{node_id}.test | sudo tee -a /etc/hosts"
       node.vm.provision "shell", inline: "sudo pacman -Sy --noconfirm wget binutils fakeroot cronie ntp"
-      # node.vm.provision "shell", inline: "sudo -H -u vagrant bash -c 'cd /opt/a2-testing && wget -N -nv https://aur.archlinux.org/cgit/aur.git/snapshot/chef-dk.tar.gz && tar -xvzf *.tar.gz'"
-      # node.vm.provision "shell", inline: "if [ \"\$(ls /opt/a2-testing/chef-dk/chef*xz)\" == \"\" ]; then sudo -H -u vagrant bash -c 'cd /opt/a2-testing/chef-dk && makepkg -s'; fi"
-      node.vm.provision "shell", inline: "cd /opt/a2-testing/pkgs/chef-dk && sudo pacman -U --noconfirm *xz"
+      # node.vm.provision "shell", inline: "sudo -H -u vagrant bash -c 'cd ${GUEST_WKDIR} && wget -N -nv https://aur.archlinux.org/cgit/aur.git/snapshot/chef-dk.tar.gz && tar -xvzf *.tar.gz'"
+      # node.vm.provision "shell", inline: "if [ \"\$(ls ${GUEST_WKDIR}/chef-dk/chef*xz)\" == \"\" ]; then sudo -H -u vagrant bash -c 'cd ${GUEST_WKDIR}/chef-dk && makepkg -s'; fi"
+      node.vm.provision "shell", inline: "cd ${GUEST_WKDIR}/pkgs/chef-dk && sudo pacman -U --noconfirm *xz"
       node.vm.provision "shell", inline: "sudo mkdir -p /etc/chef && cat >/etc/chef/client.rb <<EOL
 log_level        :info
 log_location     STDOUT
 chef_server_url  'https://chef-server.test/organizations/a2'
 validation_client_name 'a2-validator'
-validation_key '/opt/a2-testing/.chef/a2-validator.pem'
+validation_key '${GUEST_WKDIR}/.chef/a2-validator.pem'
 client_key '/etc/chef/client.pem'
 ssl_verify_mode  :verify_none
 EOL"
@@ -178,21 +190,38 @@ EOL"
     end
   end
 
-  config.vm.define :chefdk do |chefdk|
-    chefdk.vm.provider "virtualbox" do |vb|
+  config.vm.define :bldcdk do |bldcdk|
+    bldcdk.vm.provider "virtualbox" do |vb|
       vb.memory = 1024
       vb.cpus = 2
     end
-    chefdk.vm.box = "archlinux/archlinux"
-    chefdk.vm.hostname = "chefdk.test"
-    chefdk.vm.synced_folder ".", "/opt/a2-testing", create: true
-    chefdk.vm.network :private_network, ip: "192.168.33.66"
-    chefdk.ssh.username = "vagrant"
-    chefdk.ssh.password = "vagrant"
-    chefdk.vm.provision "shell", inline: "sudo pacman -Sy --noconfirm wget binutils fakeroot"
-    chefdk.vm.provision "shell", inline: "mkdir -p /opt/a2-testing/pkgs"
-    chefdk.vm.provision "shell", inline: "sudo -H -u vagrant bash -c 'cd /opt/a2-testing/pkgs && wget -N -nv https://aur.archlinux.org/cgit/aur.git/snapshot/chef-dk.tar.gz && tar -xvzf *.tar.gz'"
-    chefdk.vm.provision "shell", inline: "if [ \"\$(ls /opt/a2-testing/pkgs/chef-dk/chef*xz)\" == \"\" ]; then sudo -H -u vagrant bash -c 'cd /opt/a2-testing/pkgs/chef-dk && makepkg -s'; fi"
+    bldcdk.vm.box = "archlinux/archlinux"
+    bldcdk.vm.hostname = "bldcdk.test"
+    bldcdk.vm.synced_folder ".", "${GUEST_WKDIR}", create: true
+    bldcdk.vm.network :private_network, ip: "192.168.33.66"
+    bldcdk.ssh.username = "vagrant"
+    bldcdk.ssh.password = "vagrant"
+    bldcdk.vm.provision "shell", inline: "sudo pacman -Sy --noconfirm git binutils fakeroot"
+    bldcdk.vm.provision "shell", inline: "mkdir -p ${GUEST_WKDIR}/pkgs"
+    bldcdk.vm.provision "shell", inline: "sudo -H -u vagrant bash -c 'cd ${GUEST_WKDIR}/pkgs && git clone https://aur.archlinux.org/chef-dk.git'"
+    bldcdk.vm.provision "shell", inline: "if [ ! -f ${GUEST_WKDIR}/pkgs/chef-dk/chef*xz ]; then sudo -H -u vagrant bash -c 'cd ${GUEST_WKDIR}/pkgs/chef-dk && makepkg -s'; fi"
+  end
+
+  config.vm.define :bldsrvr do |bldsrvr|
+    bldsrvr.vm.provider "virtualbox" do |vb|
+      vb.memory = 1024
+      vb.cpus = 2
+    end
+    bldsrvr.vm.box = "archlinux/archlinux"
+    bldsrvr.vm.hostname = "bldsrvr.test"
+    bldsrvr.vm.synced_folder ".", "${GUEST_WKDIR}", create: true
+    bldsrvr.vm.network :private_network, ip: "192.168.33.67"
+    bldsrvr.ssh.username = "vagrant"
+    bldsrvr.ssh.password = "vagrant"
+    bldsrvr.vm.provision "shell", inline: "sudo pacman -Sy --noconfirm git binutils fakeroot"
+    bldsrvr.vm.provision "shell", inline: "mkdir -p ${GUEST_WKDIR}/pkgs"
+    bldsrvr.vm.provision "shell", inline: "sudo -H -u vagrant bash -c 'cd ${GUEST_WKDIR}/pkgs && if [ ! -d ./chef-server ]; then git clone https://aur.archlinux.org/chef-server.git; fi'"
+    bldsrvr.vm.provision "shell", inline: "if [ ! -f ${GUEST_WKDIR}/pkgs/chef-server/chef*xz ]; then sudo -H -u vagrant bash -c 'cd ${GUEST_WKDIR}/pkgs/chef-server && makepkg -s'; fi"
   end
 end
 EOL
@@ -202,22 +231,32 @@ do_build() {
   pids=""
   # TODO use latest stable url
   mkdir -p pkgs
-  if [ ! -f ./pkgs/chef-server*.deb ] ;
+##################
+#  if [ ! -f ./pkgs/chef-server*.deb ] ;
+#  then
+#    echo "Download chef-server-core*.deb package..."
+#    (curl https://packages.chef.io/files/stable/chef-server/12.17.33/ubuntu/16.04/chef-server-core_12.17.33-1_amd64.deb > ./pkgs/chef-server-core.deb) &
+#    pids="$pids $!"
+#  fi
+##################
+  # stand up a vm to build chef server
+  if [ ! -f ./pkgs/chef-server/chef*xz ] ;
   then
-    echo "Download chef-server-core*.deb package..."
-    (curl https://packages.chef.io/files/stable/chef-server/12.17.33/ubuntu/16.04/chef-server-core_12.17.33-1_amd64.deb > ./pkgs/chef-server-core.deb) &
+    echo "Download and build chef-server for archlinux..."
+    (vagrant up bldsrvr) &
     pids="$pids $!"
   fi
+  # stand up a vm to build chef dk
   if [ ! -f ./pkgs/chef-dk/chef*xz ] ;
   then
     echo "Download and build chef-dk for archlinux..."
-    (vagrant up chefdk) &
+    (vagrant up bldcdk) &
     pids="$pids $!"
   fi
   wait $pids
   # cleanup
-  #if [ -f /opt/a2-testing/pkgs/chef-dk/chef*xz ] ; then rm -f /pkgs/chef-dk.tar.gz; fi
-  if [ ! "vagrant status chefdk | grep 'running (virtualbox)'" == "" ] ; then vagrant destroy chefdk -f; fi
+  if [ ! "vagrant status bldcdk | grep 'running (virtualbox)'" == "" ] ; then vagrant destroy bldcdk -f; fi
+  if [ ! "vagrant status bldsrvr | grep 'running (virtualbox)'" == "" ] ; then vagrant destroy bldsrvr -f; fi
 }
 
 create_helpers() {
@@ -245,16 +284,13 @@ do_local_setup() {
     echo "knife.rb exists.  Nothing to do here."
   else
     create_knife_rb
+    knife ssl fetch
   fi
   echo "knife.rb complete."
-
-  knife ssl fetch
-  knife client list
 
   # upload cookbooks
   echo "Uploading cookbooks..."
   mkdir -p cookbooks && cd cookbooks
-
   ckbks=(audit)
   for c in $ckbks; do
     if [ "$( knife cookbook list | grep $c )" == "" ]; then
@@ -266,6 +302,7 @@ do_local_setup() {
     fi
   done
   echo "Cookbook upload complete."
+
   echo "Uploading Roles..."
   if [ -f ./roles/base.rb ] ; then
     echo "base.rb exists.  Nothing to do here."
@@ -305,10 +342,16 @@ do_chef_server_setup() {
   then
     echo "vagrant up Chef Server..."
     #clean up any last_run leftovers that will get in the way
-    rm -f srvr-token
     vagrant up srvr >/dev/tty 2>&1
   else
-    echo "Chef Server is running.  Nothing to do here."
+    echo "Chef Server is running.  Checking status..."
+    if [ "$(vagrant ssh srvr -c 'sudo chef-server-ctl status')" == ];
+    then
+      echo "No response from chef-server-ctl. running vagrant provision..."
+      vagrant provision srvr >/dev/tty 2>&1
+    else
+      echo "chef-server-ctl returns status. Nothing to do here."
+    fi
   fi
   add_host 192.168.33.200 chef-server.test
   echo "Chef Server set up complete."
@@ -325,18 +368,29 @@ echo "Setting up Automate..."
     rm -f a2-token
     vagrant up a2 >/dev/tty 2>&1
     # check for token
-    if [ ! -f ./a2-token ] ; then echo "a2-token doesn't exist" ; fi
   else
     echo "Automate is running.  Nothing to do here."
+  fi
+  if [ ! -f ./a2-token ] ;
+  then
+    echo "${RED}**********************************${NC}"
+    echo "${RED}ERROR: a2-token doesn't exist${NC}"
+    echo "${RED}**********************************${NC}"
+    break
   fi
   add_host 192.168.33.199 automate-deployment.test
   echo "Automate set up complete."
 }
 #
 # test setup
-init_test() {
-  if [ ! -f ./.chef/knife.rb ] ; then echo "ERROR: knife.rb doesn't exist" ; fi
-  if [[ "$(vagrant ssh srvr -c 'hostname -f')" != *"chef-server.test"* ]] ; then echo "ERROR: chef-server setup not complete" ; fi
+do_test() {
+  # check for local setup
+  if [ ! -f ./.chef/knife.rb ] ; then echo "${RED}ERROR: knife.rb doesn't exist${NC}" ; fi
+  # test for a functioning chef-server
+  if [[ "$(vagrant ssh srvr -c 'hostname -f')" != "chef-server.test" ]] ; then echo "${RED}ERROR: chef-server setup not complete${NC}" ; fi
+  # test for a functioning automate
+  if [[ "$(vagrant ssh srvr -c 'hostname -f')" != "automate-deployment.test" ]] ; then echo "${RED}ERROR: chef-server setup not complete${NC}" ; fi
+  # test for a bootstrapped node
 }
 
 #
@@ -363,9 +417,7 @@ do_setup() {
   echo "*******************************************************************"
   echo ""
   echo "To login to Chef Automate, use the following credentials"
-  echo "        URL: https://automate-deployment.test to try Chef Automate"
-  echo "        User: admin"
-  vagrant ssh a2 -c "sudo cat config.toml | grep 'password'" >/dev/tty 2>&1
+  vagrant ssh a2 -c "sudo cat ./automate-credentials.toml" >/dev/tty 2>&1
   echo ""
   echo "cleanup using chef-infra teardown"
   echo ""
@@ -373,9 +425,22 @@ do_setup() {
   echo "*******************************************************************"
 }
 
-do_snapshot() {
-  vagrant ssh srvr -c "sudo mkdir -p /opt/a2-testing/bkps && sudo /opt/opscode/embedded/bin/knife ec backup /opt/a2-testing/bkps/srvr-$time.bak -s https://chef-server.test"
+do_bkps() {
+  echo "Begin taking backups..."
+  d=`date '+%Y%m%d%H%M%S'`
+  sudo mkdir -p ${GUEST_WKDIR}/bkps/srvr
+  sudo mkdir -p ${GUEST_WKDIR}/bkps/a2
+  # backup chef server
+  vagrant ssh srvr -c "sudo knife ssl fetch https://chef-server.test && sudo /opt/opscode/embedded/bin/knife ec backup ${GUEST_WKDIR}/bkps/srvr/${d} -s https://chef-server.test --user pivotal --key /etc/opscode/pivotal.pem"
+  # backup automate
+  vagrant ssh a2 -c "sudo printf \"[global.v1.backups.filesystem]\npath = '${GUEST_WKDIR}/bkps/a2'\n\" > backup_config.toml && sudo ./chef-automate config patch backup_config.toml && sudo ./chef-automate backup create"
+  echo "Backups complete."
 }
+
+#do_restore() {
+  # TODO restore chef Server
+  # TODO restore automate
+#}
 
 do_teardown() {
   echo "Begin Chef Infrastructure teardown"
@@ -444,82 +509,152 @@ do_teardown() {
 # Begin chef-infra.sh
 #
 # initalize default flags
-is_setup=false
-is_local=false
-is_build=false
-is_teardown=false
+#is_setup=false
+#is_local=false
+#is_compile=false
+#is_bkps=false
+#is_rest=false
+#is_teardown=false
 cnt=2
 is_full=false
 is_yes=false
 is_pre=false
 
-for i in "$@"
-do
-case $i in
-    setup)
-    is_setup=true
+#for i in "$@"
+#do
+#case $i in
+#    is_setup=true
+#    ;;
+#    teardown)
+#    is_teardown=true
+#    ;;
+#    -l|--local)
+#    is_local=true
+#    ;;
+#    -c|--compile)
+#    is_compile=true
+#    ;;
+#    -b|--backup)
+#    is_bkps=true
+#    ;;
+#    -r|--restore)
+#    is_rest=true
+#    ;;
+#    -f|--full)
+#    is_full=true
+#    ;;
+#    -y|--yes)
+#    -p|--pretend)
+#    is_pre=true
+#    ;;
+#    -h|--help)
+#    usage
+#    ;;
+#    *)
+#    usage
+#    ;;
+#esac
+#done
+# record and print elapsed time
+start=`date +%s`
+
+# parse first argument
+case $1 in
+  setup)
+    while getopts ":l:b:c:h:" o; do
+      case $o in
+        l|local)
+          create_only
+          ;;
+        b|build)
+          create_vagrantfile 2>/dev/null
+          do_compile
+          ;;
+        c|count)
+          cnt=$OPTARG
+          echo "Create $cnt nodes"
+          ;;
+        h|help)
+          usage
+          ;;
+        *)
+          do_node_setup
+          ;;
+      esac
+    done
     ;;
-    teardown)
-    is_teardown=true
+  backup)
+    do_backup
     ;;
-    -l|--local)
-    is_local=true
+  restore)
+    do_restore
     ;;
-    -b|--build)
-    is_build=true
+  teardown)
+    while getopts ":p:y:f:h:" o; do
+      case $o in
+        p|pretend)
+          is_pre=true
+          ;;
+        y|yes)
+          is_yes=true
+          ;;
+        f|full)
+          is_full=true
+          ;;
+        h|help)
+          usage
+          ;;
+        *)
+          ;;
+      esac
+    done
+    do_teardown
     ;;
-    -f|--full)
-    is_full=true
-    ;;
-    -y|--yes)
-    is_yes=true
-    ;;
-    -p|--pretend)
-    is_pre=true
-    ;;
-    -h|--help)
-    usage
-    ;;
-    *)
+  *)
     usage
     ;;
 esac
-done
 
-RED='\033[0;31m'
-NC='\033[0m'
-# record and print elapsed time
-start=`date +%s`
-if [ $is_setup == $is_teardown ] ;
-then
-  echo " "
-  echo -e "${RED}Error: specify one task, setup or teardown${NC}"
-  echo " "
-  usage
-elif $is_setup ;
-then
-  if $is_local ;
-  then
-    create_knife_rb
-    create_base_rb
-    knife role from file base.rb
-    create_vagrantfile 2>/dev/null
-    create_helpers
-  elif $is_build ; then
-    create_vagrantfile 2>/dev/null
-    do_build
-  else
-    do_setup
-  fi
-elif $is_teardown ;
-then
-  do_teardown
-else
-  echo " "
-  echo -e "${RED}Error: specify one task, setup or teardown${NC}"
-  echo " "
-  usage
-fi
+#if [ $is_setup == $is_teardown ] ;
+#then
+#  echo " "
+#  echo -e "${RED}Error: specify one task, setup or teardown${NC}"
+#  echo " "
+#  usage
+#elif $is_setup ;
+#then
+#  if $is_local ;
+#  then
+#    echo "Creating knife.rb..."
+#    create_knife_rb
+#    echo "Creating roles/base.rb..."
+#    create_base_rb
+#    echo "Creating Vagrantfile..."
+#    create_vagrantfile 2>/dev/null
+#    echo "Creating helper scripts..."
+#    create_helpers
+#  elif $is_compile ;
+#  then
+#    create_vagrantfile 2>/dev/null
+#    do_compile
+#  elif $is_bkps ;
+#  then
+#    do_bkps
+#  elif $is_rest ;
+#  then
+#    do_restore
+#  else
+#    do_setup
+#  fi
+#elif $is_teardown ;
+#then
+#  do_teardown
+#else
+#  echo " "
+#  echo -e "${RED}Error: specify one task, setup or teardown${NC}"
+#  echo " "
+#  usage
+#fi
 
 end=`date +%s`
 runtime=$((end-start))
