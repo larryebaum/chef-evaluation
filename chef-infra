@@ -376,13 +376,16 @@ do_node_setup() {
 #
 # test setup
 do_test() {
+  echo "Begin testing setup..."
   # check for local setup
   if [ ! -f ./.chef/knife.rb ] ; then do_error "knife.rb doesn't exist" ; fi
   # test for a functioning chef-server
-  if [[ "$(vagrant ssh srvr -c 'hostname -f')" != "chef-server.test" ]] ; then do_error "chef-server setup not complete" ; fi
+  if [[ ! "$(vagrant ssh srvr -c 'hostname -f')" = *"chef-server.test"* ]] ; then do_error "chef-server setup not complete" ; fi
   # test for a functioning automate
-  if [[ "$(vagrant ssh srvr -c 'hostname -f')" != "automate-deployment.test" ]] ; then do_error "chef-server setup not complete" ; fi
-  # test for a bootstrapped node
+  if [[ ! "$(vagrant ssh srvr -c 'hostname -f')" = *"automate-deployment.test"* ]] ; then do_error "automate setup not complete" ; fi
+  # test for a validator client proving correct knife config and a working chef-server
+  if [[ ! "$(knife client list)" = *"a2-validator" ]] ; then do_error "a2-validator doesn't exist, something went wrong" ; fi
+  echo "Testing complete."
 }
 #
 # Begin setup
@@ -425,7 +428,7 @@ do_setup() {
 
   do_local_setup
   do_node_setup $cnt
-  #init_test
+  do_test
   # wrap up and repeat the user instructions that are buried in the logs
   echo "*******************************************************************"
   echo ""
@@ -633,6 +636,9 @@ case $1 in
     ;;
   troubleshoot )
     do_troubleshoot
+    ;;
+  test)
+    do_test
     ;;
   * )
     usage

@@ -24,7 +24,7 @@ it is a resource hog. Attention to available resources is advised.
 
 
 Quick Start:
-- Clone this repo and `cd a2-testing`
+- Clone this repo and `cd chef-evaluation`
 - Create ./automate.license with a valid Automate license. Otherwise, add it when logging in for the first time
 - From the base directory run `chef-infra setup`
 - Log in & Download 'DevSec Linux Security Baseline' from the Asset Store
@@ -46,6 +46,3 @@ Development:
 - TODO create Chef Workstation node
 - TODO evaluate hab chef-server & chef-client
 - TODO snapshot/recover functionality
-- TODO move chef-dk, .deb to ./bin
-- TODO set node cnt in init.sh
-- TODO cli cmd for loading profiles in automate
