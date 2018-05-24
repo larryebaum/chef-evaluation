@@ -242,6 +242,24 @@ EOL"
     bldsrvr.vm.provision "shell", inline: "sudo -H -u vagrant bash -c 'cd ${GUEST_WKDIR}/pkgs && if [ ! -d ./chef-server ]; then git clone https://aur.archlinux.org/chef-server.git; fi'"
     bldsrvr.vm.provision "shell", inline: "if [ ! -f ${GUEST_WKDIR}/pkgs/chef-server/chef*xz ]; then sudo -H -u vagrant bash -c 'cd ${GUEST_WKDIR}/pkgs/chef-server && makepkg -s'; fi"
   end
+
+  # TODO replace Arch with another flavor of debian to avoid compile time
+  # TODO create a node with Chef Workstation
+  #config.vm.define :work do |work|
+  #  work.vm.provider "virtualbox" do |vb|
+  #    vb.memory = 512
+  #    vb.cpus = 2
+  #  end
+  #  work.vm.box = "ARTACK/debian-jessie"
+  #  work.vm.hostname = "workstation.test"
+  #  work.vm.synced_folder ".", "${GUEST_WKDIR}", create: true
+  #  work.vm.network :private_network, ip: "192.168.33.198"
+  #  work.ssh.username = "vagrant"
+  #  work.ssh.password = "vagrant"
+  #  work.vm.provision "shell", inline: "wget http://artifactory.chef.co/omnibus-current-local/com/getchef/chef-workstation/0.1.115/ubuntu/16.04/chef-workstation_0.1.115-1_amd64.deb && sudo dpkg -i chef*.deb"
+  #  work.vm.provision "shell", inline: "chef -h"
+  #end
+
 end
 EOL
 }
@@ -345,12 +363,13 @@ do_node_setup() {
   do
     if [ "$(vagrant status node1$i | grep 'running (virtualbox)')" == "" ];
     then
-      vagrant up node1$i >/dev/tty 2>&1
+      vagrant up node1$i >/dev/tty 2>&1 &
     else
       echo "node1$i is running. Nothing to do here."
     fi
-    add_host 192.168.33.1$i node1$i.test
+    add_host 192.168.33.1$i node1$i.test &
   done
+  wait
   echo "Managed nodes set up complete."
 }
 
@@ -401,11 +420,8 @@ do_setup() {
   add_host 192.168.33.199 automate-deployment.test
   echo "Automate and Chef Server set up complete."
 
-  # TODO make baseline profile available
-  #this is how you can make baseline profile available to the nodes in automate
-  #post:{name: "apache-baseline", version: "2.0.2"}
-  #to:https://automate-deployment.test/api/v0/compliance/profiles?owner=admin
-  # let Chef Server and Automate complete
+  #make baseline profile available
+  curl -d '{"name": "linux-baseline", "version": "2.2.0"}' -H "Content-Type: application/json" -H "api-token: $(<./a2-token)" -X POST 'https://automate-deployment.test/api/v0/compliance/profiles?owner=admin' --insecure
 
   do_local_setup
   do_node_setup $cnt
@@ -565,7 +581,7 @@ case $1 in
       esac
     done
     create_vagrantfile 2>/dev/null
-    do_compile
+    do_build
     ;;
   backup )
     shift
