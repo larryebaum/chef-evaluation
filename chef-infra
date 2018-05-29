@@ -54,6 +54,7 @@ do_error() {
   echo "ERROR: ${1}"
   echo ""
   echo ""
+  do_end
   exit 1
 }
 #
@@ -158,7 +159,7 @@ Vagrant.configure(2) do |config|
       vb.memory = 512
       vb.cpus = 2
     end
-    srvr.vm.box = "archlinux/archlinux"
+    srvr.vm.box = "bento/ubuntu-16.04"
     srvr.vm.hostname = "chef-server.test"
     srvr.vm.synced_folder ".", "${GUEST_WKDIR}", create: true
     srvr.vm.network :private_network, ip: "192.168.33.200"
@@ -166,8 +167,8 @@ Vagrant.configure(2) do |config|
     srvr.ssh.password = "vagrant"
     srvr.vm.provision "shell", inline: "echo 192.168.33.199 automate-deployment.test | sudo tee -a /etc/hosts"
     srvr.vm.provision "shell", inline: "echo 192.168.33.200 chef-server.test | sudo tee -a /etc/hosts"
-    srvr.vm.provision "shell", inline: "sudo pacman -Sy --noconfirm fakeroot cronie ntp"
-    srvr.vm.provision "shell", inline: "cd ${GUEST_WKDIR}/pkgs/chef-server && sudo pacman -U --noconfirm *xz && sudo chef-server-ctl reconfigure"
+    srvr.vm.provision "shell", inline: "if [ ! -f ${GUEST_WKDIR}/pkgs/srvr/*.deb ]; then mkdir -p ${GUEST_WKDIR}/pkgs/srvr; cd ${GUEST_WKDIR}/pkgs/srvr; wget https://packages.chef.io/files/stable/chef-server/12.17.33/ubuntu/16.04/chef-server-core_12.17.33-1_amd64.deb; fi"
+    srvr.vm.provision "shell", inline: "dpkg -i ${GUEST_WKDIR}/pkgs/srvr/*.deb && sudo chef-server-ctl reconfigure"
     srvr.vm.provision "shell", inline: "if [ \"\$(sudo chef-server-ctl user-show | grep 'admin')\" == \"\" ]; then sudo chef-server-ctl user-create admin first last admin@example.com 'adminpwd' --filename ${GUEST_WKDIR}/.chef/admin.pem; fi"
     srvr.vm.provision "shell", inline: "if [ \"\$(sudo chef-server-ctl org-show | grep 'a2')\" == \"\" ]; then sudo chef-server-ctl org-create a2 'automate2' --association_user admin --filename ${GUEST_WKDIR}/.chef/a2-validator.pem; fi"
     srvr.vm.provision "shell", inline: "while [ ! -f ${GUEST_WKDIR}/a2-token ] ; do sleep 5 && echo '.'; done && sudo chef-server-ctl set-secret data_collector token \$(< ${GUEST_WKDIR}/a2-token) && sudo chef-server-ctl restart nginx && sudo chef-server-ctl restart opscode-erchef"
@@ -183,7 +184,7 @@ Vagrant.configure(2) do |config|
         vb.memory = 512
         vb.cpus = 2
       end
-      node.vm.box = "archlinux/archlinux"
+      node.vm.box = "bento/ubuntu-16.04"
       node.vm.hostname = "#{node_id}.test"
       node.vm.synced_folder ".", "${GUEST_WKDIR}", create: true
       node.vm.network :private_network, ip: "192.168.33.1#{i}"
@@ -191,8 +192,8 @@ Vagrant.configure(2) do |config|
       node.ssh.password = "vagrant"
       node.vm.provision "shell", inline: "echo 192.168.33.200 chef-server.test | sudo tee -a /etc/hosts"
       node.vm.provision "shell", inline: "echo 192.168.33.1#{i} #{node_id}.test | sudo tee -a /etc/hosts"
-      node.vm.provision "shell", inline: "sudo pacman -Sy --noconfirm fakeroot cronie ntp"
-      node.vm.provision "shell", inline: "cd ${GUEST_WKDIR}/pkgs/chef-dk && sudo pacman -U --noconfirm *xz"
+      node.vm.provision "shell", inline: "if [ ! -f ${GUEST_WKDIR}/pkgs/client/*.deb ]; then mkdir -p ${GUEST_WKDIR}/pkgs/client; cd ${GUEST_WKDIR}/pkgs/client; wget https://packages.chef.io/files/stable/chef/14.1.12/ubuntu/16.04/chef_14.1.12-1_amd64.deb; fi"
+      node.vm.provision "shell", inline: "dpkg -i ${GUEST_WKDIR}/pkgs/client/*.deb"
       node.vm.provision "shell", inline: "sudo mkdir -p /etc/chef && cat >/etc/chef/client.rb <<EOL
 log_level        :info
 log_location     STDOUT
@@ -203,45 +204,41 @@ client_key '/etc/chef/client.pem'
 ssl_verify_mode  :verify_none
 EOL"
       node.vm.provision "shell", inline: "sudo /usr/bin/chef-client -r 'role[base]'"
-      node.vm.provision "shell", inline: "sudo systemctl enable cronie.service && sudo systemctl start cronie.service"
       node.vm.provision "shell", inline: "(crontab -l 2>/dev/null; echo \"*/5 * * * * sudo /usr/bin/chef-client >/dev/null 2>&1\") | crontab -"
-
     end
   end
 
-  config.vm.define :bldcdk do |bldcdk|
-    bldcdk.vm.provider "virtualbox" do |vb|
-      vb.memory = 1024
-      vb.cpus = 2
-    end
-    bldcdk.vm.box = "archlinux/archlinux"
-    bldcdk.vm.hostname = "bldcdk.test"
-    bldcdk.vm.synced_folder ".", "${GUEST_WKDIR}", create: true
-    bldcdk.vm.network :private_network, ip: "192.168.33.66"
-    bldcdk.ssh.username = "vagrant"
-    bldcdk.ssh.password = "vagrant"
-    bldcdk.vm.provision "shell", inline: "sudo pacman -Sy --noconfirm git binutils fakeroot"
-    bldcdk.vm.provision "shell", inline: "mkdir -p ${GUEST_WKDIR}/pkgs"
-    bldcdk.vm.provision "shell", inline: "sudo -H -u vagrant bash -c 'cd ${GUEST_WKDIR}/pkgs && git clone https://aur.archlinux.org/chef-dk.git'"
-    bldcdk.vm.provision "shell", inline: "if [ ! -f ${GUEST_WKDIR}/pkgs/chef-dk/chef*xz ]; then sudo -H -u vagrant bash -c 'cd ${GUEST_WKDIR}/pkgs/chef-dk && makepkg -s'; fi"
-  end
-
-  config.vm.define :bldsrvr do |bldsrvr|
-    bldsrvr.vm.provider "virtualbox" do |vb|
-      vb.memory = 1024
-      vb.cpus = 2
-    end
-    bldsrvr.vm.box = "archlinux/archlinux"
-    bldsrvr.vm.hostname = "bldsrvr.test"
-    bldsrvr.vm.synced_folder ".", "${GUEST_WKDIR}", create: true
-    bldsrvr.vm.network :private_network, ip: "192.168.33.67"
-    bldsrvr.ssh.username = "vagrant"
-    bldsrvr.ssh.password = "vagrant"
-    bldsrvr.vm.provision "shell", inline: "sudo pacman -Sy --noconfirm git binutils fakeroot"
-    bldsrvr.vm.provision "shell", inline: "mkdir -p ${GUEST_WKDIR}/pkgs"
-    bldsrvr.vm.provision "shell", inline: "sudo -H -u vagrant bash -c 'cd ${GUEST_WKDIR}/pkgs && if [ ! -d ./chef-server ]; then git clone https://aur.archlinux.org/chef-server.git; fi'"
-    bldsrvr.vm.provision "shell", inline: "if [ ! -f ${GUEST_WKDIR}/pkgs/chef-server/chef*xz ]; then sudo -H -u vagrant bash -c 'cd ${GUEST_WKDIR}/pkgs/chef-server && makepkg -s'; fi"
-  end
+#  config.vm.define :bldcdk do |bldcdk|
+#      vb.memory = 1024
+#      vb.cpus = 2
+#    end
+#    bldcdk.vm.box = "archlinux/archlinux"
+#    bldcdk.vm.hostname = "bldcdk.test"
+#    bldcdk.vm.synced_folder ".", "${GUEST_WKDIR}", create: true
+#    bldcdk.vm.network :private_network, ip: "192.168.33.66"
+#    bldcdk.ssh.username = "vagrant"
+#    bldcdk.ssh.password = "vagrant"
+#    bldcdk.vm.provision "shell", inline: "sudo pacman -Sy --noconfirm git binutils fakeroot"
+#    bldcdk.vm.provision "shell", inline: "mkdir -p ${GUEST_WKDIR}/pkgs"
+#    bldcdk.vm.provision "shell", inline: "sudo -H -u vagrant bash -c 'cd ${GUEST_WKDIR}/pkgs && git clone https://aur.archlinux.org/chef-dk.git'"
+#    bldcdk.vm.provision "shell", inline: "if [ ! -f ${GUEST_WKDIR}/pkgs/chef-dk/chef*xz ]; then sudo -H -u vagrant bash -c 'cd ${GUEST_WKDIR}/pkgs/chef-dk && makepkg -s'; fi"
+#  end
+#
+#  config.vm.define :bldsrvr do |bldsrvr|
+#    bldsrvr.vm.provider "virtualbox" do |vb|
+#      vb.memory = 1024
+#      vb.cpus = 2
+#    end
+#    bldsrvr.vm.hostname = "bldsrvr.test"
+#    bldsrvr.vm.synced_folder ".", "${GUEST_WKDIR}", create: true
+#    bldsrvr.vm.network :private_network, ip: "192.168.33.67"
+#    bldsrvr.ssh.username = "vagrant"
+#    bldsrvr.ssh.password = "vagrant"
+#    bldsrvr.vm.provision "shell", inline: "sudo pacman -Sy --noconfirm git binutils fakeroot"
+#    bldsrvr.vm.provision "shell", inline: "mkdir -p ${GUEST_WKDIR}/pkgs"
+#    bldsrvr.vm.provision "shell", inline: "sudo -H -u vagrant bash -c 'cd ${GUEST_WKDIR}/pkgs && if [ ! -d ./chef-server ]; then git clone https://aur.archlinux.org/chef-server.git; fi'"
+#    bldsrvr.vm.provision "shell", inline: "if [ ! -f ${GUEST_WKDIR}/pkgs/chef-server/chef*xz ]; then sudo -H -u vagrant bash -c 'cd ${GUEST_WKDIR}/pkgs/chef-server && makepkg -s'; fi"
+#  end
 
   # TODO replace Arch with another flavor of debian to avoid compile time
   # TODO create a node with Chef Workstation
@@ -363,13 +360,12 @@ do_node_setup() {
   do
     if [ "$(vagrant status node1$i | grep 'running (virtualbox)')" == "" ];
     then
-      vagrant up node1$i >/dev/tty 2>&1 &
+      vagrant up node1$i >/dev/tty 2>&1
     else
       echo "node1$i is running. Nothing to do here."
     fi
-    add_host 192.168.33.1$i node1$i.test &
+    add_host 192.168.33.1$i node1$i.test
   done
-  wait
   echo "Managed nodes set up complete."
 }
 
@@ -378,13 +374,13 @@ do_node_setup() {
 do_test() {
   echo "Begin testing setup..."
   # check for local setup
-  if [ ! -f ./.chef/knife.rb ] ; then do_error "knife.rb doesn't exist" ; fi
+#  if [ ! -f ./.chef/knife.rb ] ; then do_error "knife.rb doesn't exist" ; fi
   # test for a functioning chef-server
   if [[ ! "$(vagrant ssh srvr -c 'hostname -f')" = *"chef-server.test"* ]] ; then do_error "chef-server setup not complete" ; fi
   # test for a functioning automate
-  if [[ ! "$(vagrant ssh srvr -c 'hostname -f')" = *"automate-deployment.test"* ]] ; then do_error "automate setup not complete" ; fi
+  if [[ ! "$(vagrant ssh a2 -c 'hostname -f')" = *"automate-deployment.test"* ]] ; then do_error "automate setup not complete" ; fi
   # test for a validator client proving correct knife config and a working chef-server
-  if [[ ! "$(knife client list)" = *"a2-validator" ]] ; then do_error "a2-validator doesn't exist, something went wrong" ; fi
+  if [[ ! "$(knife client list)" = *"a2-validator"* ]] ; then do_error "a2-validator doesn't exist, something went wrong" ; fi
   echo "Testing complete."
 }
 #
@@ -403,7 +399,7 @@ do_setup() {
   echo "Vagrantfile complete."
   # add chef dir here
   mkdir -p ./.chef
-  do_build
+  #######do_build
   echo "Setting up Automate and Chef Server..."
   # Check status of Automate
   a2_mode='provision'
@@ -533,6 +529,14 @@ do_troubleshoot() {
   echo "Tail Automate Log: journalctl -u chef-automate -f"
 }
 
+do_end() {
+  # finish up with some metrics
+  end=`date +%s`
+  runtime=$((end-$START))
+  echo ""
+  echo "script completed in $runtime seconds"
+}
+
 #
 # Begin chef-infra.sh
 #
@@ -542,8 +546,8 @@ is_full=false
 is_yes=false
 is_pre=false
 
-# record and print elapsed time
-start=`date +%s`
+# record to print elapsed time
+START=`date +%s`
 
 # parse first argument
 case $1 in
@@ -645,8 +649,5 @@ case $1 in
     ;;
 esac
 
-# finish up with some metrics
-end=`date +%s`
-runtime=$((end-start))
-echo ""
-echo "script completed in $runtime seconds"
+# all done, print the completion message
+do_end
