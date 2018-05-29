@@ -6,6 +6,7 @@
 # Static Variables
 #
 GUEST_WKDIR='/opt/a2-testing'
+WKDIR=$PWD
 #
 # helper functions
 #
@@ -85,7 +86,7 @@ remove_host() {
 # create local knife config
 #
 create_base_rb() {
-    mkdir -p ./roles && cat >./roles/base.rb <<EOL
+    mkdir -p $WKDIR/roles && cat > $WKDIR/roles/base.rb <<EOL
 name "base"
 description "baseline config"
 run_list(
@@ -109,7 +110,7 @@ EOL
 # create local knife config
 #
 create_knife_rb() {
-    mkdir -p .chef && cat >./.chef/knife.rb <<EOL
+    mkdir -p $WKDIR/.chef && cat > $WKDIR/.chef/knife.rb <<EOL
 current_dir = File.dirname(__FILE__)
 node_name                "admin"
 client_key               "../.chef/admin.pem"
@@ -123,7 +124,7 @@ EOL
 # create Vagrantfile
 #
 create_vagrantfile() {
-    cat > Vagrantfile <<EOL
+    cat > $WKDIR/Vagrantfile <<EOL
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
@@ -261,29 +262,6 @@ end
 EOL
 }
 
-do_build() {
-  pids=""
-  mkdir -p pkgs
-  # stand up a vm to build chef server
-  if [ ! -f ./pkgs/chef-server/chef*xz ] ;
-  then
-    echo "Download and build chef-server for archlinux..."
-    (vagrant up bldsrvr) &
-    pids="$pids $!"
-  fi
-  # stand up a vm to build chef dk
-  if [ ! -f ./pkgs/chef-dk/chef*xz ] ;
-  then
-    echo "Download and build chef-dk for archlinux..."
-    (vagrant up bldcdk) &
-    pids="$pids $!"
-  fi
-  wait $pids
-  # cleanup
-  if [ ! "vagrant status bldcdk | grep 'running (virtualbox)'" == "" ] ; then vagrant destroy bldcdk -f; fi
-  if [ ! "vagrant status bldsrvr | grep 'running (virtualbox)'" == "" ] ; then vagrant destroy bldsrvr -f; fi
-}
-
 create_helpers() {
   cat > rm-node <<EOL
 #!/bin/bash
@@ -299,7 +277,7 @@ EOL
   chmod +x rm-node
 }
 
-do_create() {
+do_build() {
   echo "Creating knife.rb..."
   create_knife_rb
   echo "Creating roles/base.rb..."
@@ -326,7 +304,7 @@ do_local_setup() {
 
   # upload cookbooks
   echo "Uploading cookbooks..."
-  mkdir -p cookbooks && cd cookbooks
+  mkdir -p $WKDIR/cookbooks && cd $WKDIR/cookbooks
   ckbks=(audit)
   for c in $ckbks; do
     if [ "$( knife cookbook list | grep $c )" == "" ]; then
@@ -340,7 +318,8 @@ do_local_setup() {
   echo "Cookbook upload complete."
 
   echo "Uploading Roles..."
-  if [ -f ./roles/base.rb ] ; then
+  cd $WKDIR
+  if [ -f $WKDIR/roles/base.rb ] ; then
     echo "base.rb exists.  Nothing to do here."
   else
     create_base_rb
@@ -391,14 +370,14 @@ do_test() {
 do_setup() {
   echo "Begin Chef Infrastructure setup..."
   echo "Creating Vagrantfile..."
-  if [ -f ./Vagrantfile ] ; then
+  if [ -f $WKDIR/Vagrantfile ] ; then
     echo "Vagrantfile exists.  Nothing to do here."
   else
     create_vagrantfile 2>/dev/null
   fi
   echo "Vagrantfile complete."
   # add chef dir here
-  mkdir -p ./.chef
+  mkdir -p $WKDIR/.chef
   #######do_build
   echo "Setting up Automate and Chef Server..."
   # Check status of Automate
@@ -440,8 +419,8 @@ do_setup() {
 do_backup() {
   echo "Begin taking backups..."
   d=`date '+%Y%m%d%H%M%S'`
-  sudo mkdir -p ${GUEST_WKDIR}/bkps/srvr
-  sudo mkdir -p ${GUEST_WKDIR}/bkps/a2
+  sudo mkdir -p ${WKDIR}/bkps/srvr
+  sudo mkdir -p ${WKDIR}/bkps/a2
   # backup chef server
   vagrant ssh srvr -c "sudo knife ssl fetch https://chef-server.test && sudo /opt/opscode/embedded/bin/knife ec backup ${GUEST_WKDIR}/bkps/srvr/${d} -s https://chef-server.test --user pivotal --key /etc/opscode/pivotal.pem"
   # backup automate
@@ -571,23 +550,6 @@ case $1 in
     ;;
   build )
     shift
-    while getopts ":flh" o; do
-      case $o in
-        f|force )
-          rm -rf ./pkgs
-          ;;
-        l|local )
-          do_create
-          ;;
-        h|help )
-          usage
-          ;;
-        * )
-          usage
-          ;;
-      esac
-    done
-    create_vagrantfile 2>/dev/null
     do_build
     ;;
   backup )

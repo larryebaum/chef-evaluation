@@ -3,15 +3,14 @@ Purpose: Stand up an Automate v2.0 evaluation environment (aka: YACv?, Yet Anoth
 - Chef Server (Manage-less)
 - X Nodes to Bootstrap and manage
 
-`chef-infra` will create or download all the resources needed to
-accomplish the setup.
+`chef-infra` is a bash script that will create or download all the resources needed to
+setup an evaluation of the Chef Infrastructure.
 
 
 Prereqs:
 - Vitualbox (tested v5.2.12)
 - vagrant (tested v2.1.1)
 - vagrant box: bento/ubuntu-16.04
-- vagrant box: archlinux/archlinux
 - chefdk (tested v2.5.3)
 - WWW Internet access
 - Automate License key
