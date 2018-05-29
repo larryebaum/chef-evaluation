@@ -27,7 +27,7 @@ Quick Start:
 - Clone this repo and `cd chef-evaluation`
 - Create ./automate.license with a valid Automate license. Otherwise, add it when logging in for the first time
 - From the base directory run `chef-infra setup`
-- Log in & Download 'DevSec Linux Security Baseline' from the Asset Store
+- Log in instructions are printed to the terminal
 - Look at `chef-infra -h` for more info & teardown instructions
 
 
