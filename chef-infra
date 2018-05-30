@@ -5,8 +5,8 @@
 #
 # Static Variables
 #
-GUEST_WKDIR='/opt/a2-testing'
 WKDIR=$PWD
+GUEST_WKDIR='/opt/a2-testing'
 #
 # helper functions
 #
@@ -21,29 +21,32 @@ usage() {
   echo "    teardown"
   echo "    troubleshoot"
   echo ""
-  echo "-h,--help    show this message"
+  echo "  options:"
+  echo "  -h,--help    show this message"
   echo ""
   echo "setup: Creat a local Chef Infrastructure"
-  echo "Available options"
-  echo "-c, --count requires an integer. Number of nodes to include in the fleet (default: 2)"
   echo ""
-  echo "build: Compile binaries"
-  echo "-f, --force remove current packages and re-build"
-  echo "-l, --local Create/overwrite local files only, create Vagrantfile,"
-  echo "              knife.rb, cookbook upload, etc."
+  echo "  options:"
+  echo "  -c, --count requires an integer. Number of nodes to include in the fleet (default: 2)"
+  echo ""
+  echo "build: Create/overwrite local files: Vagrantfile,"
+  echo "              knife.rb, base.rb, etc."
   echo ""
   echo "backup: create snapshots of Automate and Chef Server"
   echo ""
   echo "restore: Restore to the latest backup, if one exists"
-  echo "-s, --server Path to Chef server backup (default: latest file)"
-  echo "-a, --automate Path to Automate backup (default: latest file)"
+  echo "  options:"
+  echo "  -a, --automate Directory in ./bkps/a2 containing Automate backup (default: latest modified)"
+  echo "  -s, --server Directory in ./bkps/srvr containing Chef Server backup (default: latest modified)"
   echo ""
   echo "teardown: Remove files and objects created"
-  echo "-p,--pretend just list what will be done"
-  echo "-f,--full    Remove .deb packages. The process downloads and creates .deb"
-  echo "             packages. For convienience and speed, these are not removed"
-  echo "             by default."
-  echo "-y,--yes     answer yes to all prompts";
+  echo "  options:"
+  echo "  -b,--backup  Create a backup before tearing down. Pointless to use with -f"
+  echo "  -f,--full    Remove .deb packages. The process downloads and creates .deb"
+  echo "               packages. For convienience and speed, these are not removed"
+  echo "               by default."
+  echo "  -p,--pretend just list what will be done"
+  echo "  -y,--yes     answer yes to all prompts"
   echo ""
   echo "troubleshoot: Print useful cmds"
 
@@ -105,7 +108,6 @@ default_attributes(
 )
 EOL
 }
-
 #
 # create local knife config
 #
@@ -209,54 +211,20 @@ EOL"
     end
   end
 
-#  config.vm.define :bldcdk do |bldcdk|
-#      vb.memory = 1024
-#      vb.cpus = 2
-#    end
-#    bldcdk.vm.box = "archlinux/archlinux"
-#    bldcdk.vm.hostname = "bldcdk.test"
-#    bldcdk.vm.synced_folder ".", "${GUEST_WKDIR}", create: true
-#    bldcdk.vm.network :private_network, ip: "192.168.33.66"
-#    bldcdk.ssh.username = "vagrant"
-#    bldcdk.ssh.password = "vagrant"
-#    bldcdk.vm.provision "shell", inline: "sudo pacman -Sy --noconfirm git binutils fakeroot"
-#    bldcdk.vm.provision "shell", inline: "mkdir -p ${GUEST_WKDIR}/pkgs"
-#    bldcdk.vm.provision "shell", inline: "sudo -H -u vagrant bash -c 'cd ${GUEST_WKDIR}/pkgs && git clone https://aur.archlinux.org/chef-dk.git'"
-#    bldcdk.vm.provision "shell", inline: "if [ ! -f ${GUEST_WKDIR}/pkgs/chef-dk/chef*xz ]; then sudo -H -u vagrant bash -c 'cd ${GUEST_WKDIR}/pkgs/chef-dk && makepkg -s'; fi"
-#  end
-#
-#  config.vm.define :bldsrvr do |bldsrvr|
-#    bldsrvr.vm.provider "virtualbox" do |vb|
-#      vb.memory = 1024
-#      vb.cpus = 2
-#    end
-#    bldsrvr.vm.hostname = "bldsrvr.test"
-#    bldsrvr.vm.synced_folder ".", "${GUEST_WKDIR}", create: true
-#    bldsrvr.vm.network :private_network, ip: "192.168.33.67"
-#    bldsrvr.ssh.username = "vagrant"
-#    bldsrvr.ssh.password = "vagrant"
-#    bldsrvr.vm.provision "shell", inline: "sudo pacman -Sy --noconfirm git binutils fakeroot"
-#    bldsrvr.vm.provision "shell", inline: "mkdir -p ${GUEST_WKDIR}/pkgs"
-#    bldsrvr.vm.provision "shell", inline: "sudo -H -u vagrant bash -c 'cd ${GUEST_WKDIR}/pkgs && if [ ! -d ./chef-server ]; then git clone https://aur.archlinux.org/chef-server.git; fi'"
-#    bldsrvr.vm.provision "shell", inline: "if [ ! -f ${GUEST_WKDIR}/pkgs/chef-server/chef*xz ]; then sudo -H -u vagrant bash -c 'cd ${GUEST_WKDIR}/pkgs/chef-server && makepkg -s'; fi"
-#  end
-
-  # TODO replace Arch with another flavor of debian to avoid compile time
-  # TODO create a node with Chef Workstation
-  #config.vm.define :work do |work|
-  #  work.vm.provider "virtualbox" do |vb|
-  #    vb.memory = 512
-  #    vb.cpus = 2
-  #  end
-  #  work.vm.box = "ARTACK/debian-jessie"
-  #  work.vm.hostname = "workstation.test"
-  #  work.vm.synced_folder ".", "${GUEST_WKDIR}", create: true
-  #  work.vm.network :private_network, ip: "192.168.33.198"
-  #  work.ssh.username = "vagrant"
-  #  work.ssh.password = "vagrant"
-  #  work.vm.provision "shell", inline: "wget http://artifactory.chef.co/omnibus-current-local/com/getchef/chef-workstation/0.1.115/ubuntu/16.04/chef-workstation_0.1.115-1_amd64.deb && sudo dpkg -i chef*.deb"
-  #  work.vm.provision "shell", inline: "chef -h"
-  #end
+  config.vm.define :work do |work|
+    work.vm.provider "virtualbox" do |vb|
+      vb.memory = 512
+      vb.cpus = 2
+    end
+    work.vm.box = "bento/ubuntu-16.04"
+    work.vm.hostname = "workstation.test"
+    work.vm.synced_folder ".", "${GUEST_WKDIR}", create: true
+    work.vm.network :private_network, ip: "192.168.33.198"
+    work.ssh.username = "vagrant"
+    work.ssh.password = "vagrant"
+    work.vm.provision "shell", inline: "wget https://packages.chef.io/files/stable/chef-workstation/0.1.120/ubuntu/16.04/chef-workstation_0.1.120-1_amd64.deb && sudo dpkg -i chef*.deb"
+    work.vm.provision "shell", inline: "chef-run -v"
+  end
 
 end
 EOL
@@ -387,13 +355,11 @@ do_setup() {
   srvr_mode='provision'
   if [ "$(vagrant status srvr | grep 'running (virtualbox)')" == "" ]; then srvr_mode='up' ; fi
   # clean up any last_run leftovers that will get in the way
-  #vagrant $a2_mode a2 >/dev/tty 2>&1 &
-  #vagrant $srvr_mode srvr >/dev/tty 2>&1 &
   vagrant $a2_mode a2 >/dev/tty 2>&1 &
   vagrant $srvr_mode srvr >/dev/tty 2>&1 &
   wait
 
-  if [ ! -f ./a2-token ] ; then do_error "a2-token doesn't exist"; fi
+  if [ ! -f $WKDIR/a2-token ] ; then do_error "a2-token doesn't exist"; fi
   add_host 192.168.33.200 chef-server.test
   add_host 192.168.33.199 automate-deployment.test
   echo "Automate and Chef Server set up complete."
@@ -419,10 +385,10 @@ do_setup() {
 do_backup() {
   echo "Begin taking backups..."
   d=`date '+%Y%m%d%H%M%S'`
-  sudo mkdir -p ${WKDIR}/bkps/srvr
-  sudo mkdir -p ${WKDIR}/bkps/a2
+  mkdir -p ${WKDIR}/bkps/srvr
+  mkdir -p ${WKDIR}/bkps/a2
   # backup chef server
-  vagrant ssh srvr -c "sudo knife ssl fetch https://chef-server.test && sudo /opt/opscode/embedded/bin/knife ec backup ${GUEST_WKDIR}/bkps/srvr/${d} -s https://chef-server.test --user pivotal --key /etc/opscode/pivotal.pem"
+  vagrant ssh srvr -c "sudo /opt/opscode/embedded/bin/knife ssl fetch https://chef-server.test && sudo /opt/opscode/embedded/bin/knife ec backup ${GUEST_WKDIR}/bkps/srvr/${d} -s https://chef-server.test --user pivotal --key /etc/opscode/pivotal.pem"
   # backup automate
   vagrant ssh a2 -c "if [ ! -f backup_config.toml ]; then sudo printf \"[global.v1.backups.filesystem]\npath = '${GUEST_WKDIR}/bkps/a2'\n\" > backup_config.toml && sudo ./chef-automate config patch backup_config.toml; fi && sudo ./chef-automate backup create"
   echo "Backups complete."
@@ -430,12 +396,16 @@ do_backup() {
 
 do_restore() {
   # restore chef Server
-  if [ "x$srvr_bak" = "x" ]; then srvr_bak=`ls -tr ./bkps/srvr | tail -1` ; fi
-  if [ "x$a2_bak" = "x" ]; then a2_bak=`ls -tr ./bkps/a2 | tail -1` ; fi
-  if [ ! -d $srvr_bak ]; then do_error "Chef Server Backup does not exist. Look in ./bkps and try again." ; fi
-  if [ ! -d $a2_bak ]; then do_error "Automate Backup does not exist. Look in ./bkps and try again." ; fi
-  vagrant ssh srvr -c "sudo knife ssl fetch https://chef-server.test && sudo /opt/opscode/embedded/bin/knife ec restore ${GUEST_WKDIR}/bkps/srvr/${srvr_bak} -s https://chef-server.test --user pivotal --key /etc/opscode/pivotal.pem"
+  echo "Begin restore..."
+  if [ "x$srvr_bak" = "x" ]; then srvr_bak=`ls -tr $WKDIR/bkps/srvr | tail -1` ; fi
+  if [ "x$a2_bak" = "x" ]; then a2_bak=`ls -tr $WKDIR/bkps/a2 | tail -1` ; fi
+  echo "Restoring Chef Server from: ${srvr_bak}"
+  echo "Restoring Chef Server from: ${a2_bak}"
+  if [ ! -d $WKDIR/bkps/srvr/$srvr_bak ]; then do_error "Chef Server Backup does not exist. Look in ${WKDIR}/bkps and try again." ; fi
+  if [ ! -d $WKDIR/bkps/a2/$a2_bak ]; then do_error "Automate Backup does not exist. Look in ${WKDIR}/bkps and try again." ; fi
+  vagrant ssh srvr -c "sudo /opt/opscode/embedded/bin/knife ssl fetch https://chef-server.test && sudo /opt/opscode/embedded/bin/knife ec restore ${GUEST_WKDIR}/bkps/srvr/${srvr_bak} -s https://chef-server.test --user pivotal --key /etc/opscode/pivotal.pem"
   vagrant ssh a2 -c "sudo ./chef-automate backup restore $a2_bak"
+  echo "Restore complete."
 }
 
 do_teardown() {
@@ -495,7 +465,6 @@ do_teardown() {
   if ! $is_pre ; then mv -f ./.vagrant ./removing ; fi
   echo "nuke the temporary ./removing dir..."
   if ! $is_pre ; then rm -rf ./removing ; fi
-
   echo " "
   echo "Teardown of Chef Infrastructure complete. Thanks for playing... :)"
 }
@@ -560,12 +529,12 @@ case $1 in
     shift
     while getopts ":s:a:h" o; do
       case $o in
-        s|server )
-          srvr_bak=$OPTARG
-          shift
-          ;;
         a|automate )
           a2_bak=$OPTARG
+          shift
+          ;;
+        s|server )
+          srvr_bak=$OPTARG
           shift
           ;;
         h|help )
@@ -582,14 +551,17 @@ case $1 in
     shift
     while getopts ":pyfh" o; do
       case $o in
+        b|backup )
+          do_backup
+          ;;
+        f|full )
+          is_full=true
+          ;;
         p|pretend )
           is_pre=true
           ;;
         y|yes )
           is_yes=true
-          ;;
-        f|full )
-          is_full=true
           ;;
         h|help )
           usage
