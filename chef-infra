@@ -50,7 +50,7 @@ usage() {
   echo ""
   echo "troubleshoot: Print useful cmds"
 
-  exit 1;
+  exit 0;
 }
 
 do_error() {
@@ -387,6 +387,10 @@ do_backup() {
   d=`date '+%Y%m%d%H%M%S'`
   mkdir -p ${WKDIR}/bkps/srvr
   mkdir -p ${WKDIR}/bkps/a2
+  mkdir -p ${WKDIR}/bkps/keys
+  # backup keys
+  mkdir -p ${WKDIR}/bkps/keys/${d}
+  cp ${WKDIR}/.chef/*.pem ${WKDIR}/bkps/keys/${d}
   # backup chef server
   vagrant ssh srvr -c "sudo /opt/opscode/embedded/bin/knife ssl fetch https://chef-server.test && sudo /opt/opscode/embedded/bin/knife ec backup ${GUEST_WKDIR}/bkps/srvr/${d} -s https://chef-server.test --user pivotal --key /etc/opscode/pivotal.pem"
   # backup automate
@@ -395,15 +399,26 @@ do_backup() {
 }
 
 do_restore() {
-  # restore chef Server
+  # there is NO validation that the backups are in sync
+  # the assumption is that the last modified directories go together  
+
   echo "Begin restore..."
+  # check for cli arguments
+  if [ "x$keys_bak" = "x" ]; then keys_bak=`ls -tr $WKDIR/bkps/keys | tail -1` ; fi
   if [ "x$srvr_bak" = "x" ]; then srvr_bak=`ls -tr $WKDIR/bkps/srvr | tail -1` ; fi
   if [ "x$a2_bak" = "x" ]; then a2_bak=`ls -tr $WKDIR/bkps/a2 | tail -1` ; fi
+  echo "Restoring keys from: ${keys_bak}"
   echo "Restoring Chef Server from: ${srvr_bak}"
-  echo "Restoring Chef Server from: ${a2_bak}"
+  echo "Restoring Automate from: ${a2_bak}"
+  # validate backup directories exist
+  if [ ! -d $WKDIR/bkps/keys/$keys_bak ]; then do_error "keys do not exist. Look in ${WKDIR}/keys and try again." ; fi
   if [ ! -d $WKDIR/bkps/srvr/$srvr_bak ]; then do_error "Chef Server Backup does not exist. Look in ${WKDIR}/bkps and try again." ; fi
   if [ ! -d $WKDIR/bkps/a2/$a2_bak ]; then do_error "Automate Backup does not exist. Look in ${WKDIR}/bkps and try again." ; fi
+  # restore keys
+  cp $WKDIR/bkps/keys/$keys_bak/*.pem $WKDIR/.chef
+  # restore chef server
   vagrant ssh srvr -c "sudo /opt/opscode/embedded/bin/knife ssl fetch https://chef-server.test && sudo /opt/opscode/embedded/bin/knife ec restore ${GUEST_WKDIR}/bkps/srvr/${srvr_bak} -s https://chef-server.test --user pivotal --key /etc/opscode/pivotal.pem"
+  # restore automate
   vagrant ssh a2 -c "sudo ./chef-automate backup restore $a2_bak"
   echo "Restore complete."
 }
@@ -531,6 +546,10 @@ case $1 in
       case $o in
         a|automate )
           a2_bak=$OPTARG
+          shift
+          ;;
+        k|keys )
+          keys_bak=$OPTARG
           shift
           ;;
         s|server )
