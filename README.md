@@ -1,4 +1,4 @@
-#Chef Evaluation
+# Chef Evaluation
 ## Purpose: Stand up an Automate v2.0 evaluation environment (aka: YACv?, Yet Another Chef server setup)
 - Chef Automate v2.0
 - Chef Server (Manage-less)
@@ -35,7 +35,7 @@ Ideally, `chef-infra setup` will "just work" and give you everything required.  
 1. Did srvr converge w/out error? Does ./.chef/admin.pem exist? If no, try `vagrant provision srvr`
 1. Did nodeX converge w/out error? If no, check status of a2 and srvr.  Try `knife ssl fetch && knife cookbook upload audit && knife role from file base.rb`.  Was the DevSec profile added to Automate? If no, log in and do that.
 
-### Manage nodes 
+### Manage nodes
 - Create/install a single node only: `vagrant up [a2|srvr|node1[n]]`
 - Retry creation of a single node: `vagrant provision [a2|srvr|node1[n]]`
 ### Chef Workstation:

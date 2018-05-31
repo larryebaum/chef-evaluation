@@ -86,8 +86,9 @@ remove_host() {
   fi
 }
 #
-# create local knife config
-#
+# create base role
+# This functionality was put in a role for simplicity, in a production scenario
+# consider using a wrapper cookbook.
 create_base_rb() {
     mkdir -p $WKDIR/roles && cat > $WKDIR/roles/base.rb <<EOL
 name "base"
@@ -150,7 +151,7 @@ Vagrant.configure(2) do |config|
     a2.vm.provision "shell", inline: "sysctl -w vm.max_map_count=262144"
     a2.vm.provision "shell", inline: "sysctl -w vm.dirty_expire_centisecs=20000"
     a2.vm.provision "shell", inline: "echo 192.168.33.199 automate-deployment.test | sudo tee -a /etc/hosts"
-    a2.vm.provision "shell", inline: "cd /home/vagrant && curl https://packages.chef.io/files/current/automate/latest/chef-automate_linux_amd64.zip |gunzip - > chef-automate && chmod +x chef-automate"
+    a2.vm.provision "shell", inline: "cd /home/vagrant && curl -s https://packages.chef.io/files/current/automate/latest/chef-automate_linux_amd64.zip |gunzip - > chef-automate && chmod +x chef-automate"
     a2.vm.provision "shell", inline: "sudo ./chef-automate init-config"
     a2.vm.provision "shell", inline: "sudo ./chef-automate deploy config.toml --accept-terms-and-mlsa --skip-preflight"
     a2.vm.provision "shell", inline: "if [ -f ${GUEST_WKDIR}/automate.license ]; then sudo ./chef-automate license apply \$(< ${GUEST_WKDIR}/automate.license) && sudo ./chef-automate license status ; fi"
@@ -170,7 +171,7 @@ Vagrant.configure(2) do |config|
     srvr.ssh.password = "vagrant"
     srvr.vm.provision "shell", inline: "echo 192.168.33.199 automate-deployment.test | sudo tee -a /etc/hosts"
     srvr.vm.provision "shell", inline: "echo 192.168.33.200 chef-server.test | sudo tee -a /etc/hosts"
-    srvr.vm.provision "shell", inline: "if [ ! -f ${GUEST_WKDIR}/pkgs/srvr/*.deb ]; then mkdir -p ${GUEST_WKDIR}/pkgs/srvr; cd ${GUEST_WKDIR}/pkgs/srvr; wget https://packages.chef.io/files/stable/chef-server/12.17.33/ubuntu/16.04/chef-server-core_12.17.33-1_amd64.deb; fi"
+    srvr.vm.provision "shell", inline: "if [ ! -f ${GUEST_WKDIR}/pkgs/srvr/*.deb ]; then mkdir -p ${GUEST_WKDIR}/pkgs/srvr; cd ${GUEST_WKDIR}/pkgs/srvr; wget -q https://packages.chef.io/files/stable/chef-server/12.17.33/ubuntu/16.04/chef-server-core_12.17.33-1_amd64.deb; fi"
     srvr.vm.provision "shell", inline: "dpkg -i ${GUEST_WKDIR}/pkgs/srvr/*.deb && sudo chef-server-ctl reconfigure"
     srvr.vm.provision "shell", inline: "if [ \"\$(sudo chef-server-ctl user-show | grep 'admin')\" == \"\" ]; then sudo chef-server-ctl user-create admin first last admin@example.com 'adminpwd' --filename ${GUEST_WKDIR}/.chef/admin.pem; fi"
     srvr.vm.provision "shell", inline: "if [ \"\$(sudo chef-server-ctl org-show | grep 'a2')\" == \"\" ]; then sudo chef-server-ctl org-create a2 'automate2' --association_user admin --filename ${GUEST_WKDIR}/.chef/a2-validator.pem; fi"
@@ -195,7 +196,7 @@ Vagrant.configure(2) do |config|
       node.ssh.password = "vagrant"
       node.vm.provision "shell", inline: "echo 192.168.33.200 chef-server.test | sudo tee -a /etc/hosts"
       node.vm.provision "shell", inline: "echo 192.168.33.1#{i} #{node_id}.test | sudo tee -a /etc/hosts"
-      node.vm.provision "shell", inline: "if [ ! -f ${GUEST_WKDIR}/pkgs/client/*.deb ]; then mkdir -p ${GUEST_WKDIR}/pkgs/client; cd ${GUEST_WKDIR}/pkgs/client; wget https://packages.chef.io/files/stable/chef/14.1.12/ubuntu/16.04/chef_14.1.12-1_amd64.deb; fi"
+      node.vm.provision "shell", inline: "if [ ! -f ${GUEST_WKDIR}/pkgs/client/*.deb ]; then mkdir -p ${GUEST_WKDIR}/pkgs/client; cd ${GUEST_WKDIR}/pkgs/client; wget -q https://packages.chef.io/files/stable/chef/14.1.12/ubuntu/16.04/chef_14.1.12-1_amd64.deb; fi"
       node.vm.provision "shell", inline: "dpkg -i ${GUEST_WKDIR}/pkgs/client/*.deb"
       node.vm.provision "shell", inline: "sudo mkdir -p /etc/chef && cat >/etc/chef/client.rb <<EOL
 log_level        :info
@@ -222,7 +223,7 @@ EOL"
     work.vm.network :private_network, ip: "192.168.33.198"
     work.ssh.username = "vagrant"
     work.ssh.password = "vagrant"
-    work.vm.provision "shell", inline: "wget https://packages.chef.io/files/stable/chef-workstation/0.1.120/ubuntu/16.04/chef-workstation_0.1.120-1_amd64.deb && sudo dpkg -i chef*.deb"
+    work.vm.provision "shell", inline: "wget -q https://packages.chef.io/files/stable/chef-workstation/0.1.120/ubuntu/16.04/chef-workstation_0.1.120-1_amd64.deb && sudo dpkg -i chef*.deb"
     work.vm.provision "shell", inline: "chef-run -v"
   end
 
@@ -262,7 +263,7 @@ do_build() {
 do_local_setup() {
   echo "Setting up Host/Local Dev/Workstation..."
   echo "Configuring knife.rb..."
-  if [ -f ./.chef/knife.rb ] ; then
+  if [ -f $WKDIR/.chef/knife.rb ] ; then
     echo "knife.rb exists.  Nothing to do here."
   else
     create_knife_rb
@@ -321,7 +322,7 @@ do_node_setup() {
 do_test() {
   echo "Begin testing setup..."
   # check for local setup
-#  if [ ! -f ./.chef/knife.rb ] ; then do_error "knife.rb doesn't exist" ; fi
+  if [ ! -f $WKDIR/.chef/knife.rb ] ; then do_error "knife.rb doesn't exist" ; fi
   # test for a functioning chef-server
   if [[ ! "$(vagrant ssh srvr -c 'hostname -f')" = *"chef-server.test"* ]] ; then do_error "chef-server setup not complete" ; fi
   # test for a functioning automate
@@ -364,7 +365,7 @@ do_setup() {
   add_host 192.168.33.199 automate-deployment.test
   echo "Automate and Chef Server set up complete."
 
-  #make baseline profile available
+  #make baseline profile available with an API call to Automate
   curl -d '{"name": "linux-baseline", "version": "2.2.0"}' -H "Content-Type: application/json" -H "api-token: $(<./a2-token)" -X POST 'https://automate-deployment.test/api/v0/compliance/profiles?owner=admin' --insecure
 
   do_local_setup
@@ -385,12 +386,12 @@ do_setup() {
 do_backup() {
   echo "Begin taking backups..."
   d=`date '+%Y%m%d%H%M%S'`
-  mkdir -p ${WKDIR}/bkps/srvr
-  mkdir -p ${WKDIR}/bkps/a2
-  mkdir -p ${WKDIR}/bkps/keys
+  mkdir -p $WKDIR/bkps/srvr
+  mkdir -p $WKDIR/bkps/a2
+  mkdir -p $WKDIR/bkps/keys
   # backup keys
-  mkdir -p ${WKDIR}/bkps/keys/${d}
-  cp ${WKDIR}/.chef/*.pem ${WKDIR}/bkps/keys/${d}
+  mkdir -p $WKDIR/bkps/keys/$d
+  cp $WKDIR/.chef/*.pem $WKDIR/bkps/keys/$d
   # backup chef server
   vagrant ssh srvr -c "sudo /opt/opscode/embedded/bin/knife ssl fetch https://chef-server.test && sudo /opt/opscode/embedded/bin/knife ec backup ${GUEST_WKDIR}/bkps/srvr/${d} -s https://chef-server.test --user pivotal --key /etc/opscode/pivotal.pem"
   # backup automate
@@ -400,7 +401,7 @@ do_backup() {
 
 do_restore() {
   # there is NO validation that the backups are in sync
-  # the assumption is that the last modified directories go together  
+  # the assumption is that the last modified directories go together
 
   echo "Begin restore..."
   # check for cli arguments
