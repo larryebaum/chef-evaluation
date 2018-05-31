@@ -8,6 +8,10 @@
 WKDIR=$PWD
 GUEST_WKDIR='/opt/a2-testing'
 #
+# include helper functions
+#
+. helpers.sh
+#
 # helper functions
 #
 usage() {
@@ -37,6 +41,7 @@ usage() {
   echo "restore: Restore to the latest backup, if one exists"
   echo "  options:"
   echo "  -a, --automate Directory in ./bkps/a2 containing Automate backup (default: latest modified)"
+  echo "  -k, --keys Directory in ./bkps/keys containing backup of keys (default: latest modified)"
   echo "  -s, --server Directory in ./bkps/srvr containing Chef Server backup (default: latest modified)"
   echo ""
   echo "teardown: Remove files and objects created"
@@ -51,39 +56,6 @@ usage() {
   echo "troubleshoot: Print useful cmds"
 
   exit 0;
-}
-
-do_error() {
-  echo ""
-  echo "ERROR: ${1}"
-  echo ""
-  echo ""
-  do_end
-  exit 1
-}
-#
-# append to /etc/hosts file
-#
-add_host() {
-  if [ -n "$(grep "$2" /etc/hosts)" ]; then
-    echo "$2, already exists";
-  else
-    echo "adding $2 to /etc/hosts";
-    printf "%s\t%s\n" "$1" "$2" | sudo tee -a "/etc/hosts" > /dev/null;
-  fi
-}
-#
-# remove from /etc/hosts file
-#
-remove_host() {
-  if [ -n "$(grep "$1" /etc/hosts)" ]; then
-    echo "$1 found in /etc/hosts. Removing now..."
-    if ! $2 ; then
-      sudo sed -ie "/$1/d" "/etc/hosts"
-    fi
-  else
-    echo "$1 was not found in /etc/hosts"
-  fi
 }
 #
 # create base role
@@ -493,13 +465,6 @@ do_troubleshoot() {
   echo "Tail Automate Log: journalctl -u chef-automate -f"
 }
 
-do_end() {
-  # finish up with some metrics
-  end=`date +%s`
-  runtime=$((end-$START))
-  echo ""
-  echo "script completed in $runtime seconds"
-}
 
 #
 # Begin chef-infra.sh
@@ -510,10 +475,8 @@ is_full=false
 is_yes=false
 is_pre=false
 
-# record to print elapsed time
-START=`date +%s`
-
-# parse first argument
+do_start
+# parse command line
 case $1 in
   setup)
     shift
@@ -603,5 +566,5 @@ case $1 in
     ;;
 esac
 
-# all done, print the completion message
+# all done, call end completion message
 do_end
