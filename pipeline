@@ -1,0 +1,57 @@
+#!/bin/bash
+# Author: Mike Tyler - mtyler - mtyler@chef.io
+# Purpose: Stand up a cookbook pipeline in conjunction with an
+# Automate v2.0 evaluation environment
+
+. helpers.sh
+
+#
+# create base role
+# This functionality was put in a role for simplicity, in a production scenario
+# consider using a wrapper cookbook.
+create_jenkins_rb() {
+    mkdir -p $WKDIR/roles && cat > $WKDIR/roles/jenkins.rb <<EOL
+name "jenkins"
+description "jenkins stuff"
+run_list(
+  "role[base]",
+  "recipe[java::default]",
+  "recipe[jenkins::master]"
+)
+default_attributes(
+  "java": {
+    "jdk_version": "8"
+  }
+)
+EOL
+}
+
+create_docjenkins_rb() {
+    mkdir -p $WKDIR/roles && cat > $WKDIR/roles/docjenkins.rb <<EOL
+name "docjenkins"
+description "jenkins stuff"
+run_list(
+  "role[base]",
+  "recipe[java::default]",
+  "recipe[chefinfra-jenkins::master]"
+)
+default_attributes(
+  "java": {
+    "jdk_version": "8"
+  }
+)
+EOL
+}
+
+#
+# Begin pipeline
+#
+do_start
+do_infra_test
+
+create_jenkins_rb
+do_cookbook_upload $WKDIR "yum-epel windows homebrew packagecloud java runit dpkg_autostart jenkins"
+do_roles_upload $WKDIR "jenkins.rb"
+
+knife node run_list set node10.test "role[jenkins]"
+vagrant ssh node10 -c "sudo chef-client"

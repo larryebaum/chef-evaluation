@@ -5,7 +5,6 @@
 #
 # Static Variables
 #
-WKDIR=$PWD
 GUEST_WKDIR='/opt/a2-testing'
 #
 # include helper functions
@@ -125,7 +124,7 @@ Vagrant.configure(2) do |config|
     a2.vm.provision "shell", inline: "echo 192.168.33.199 automate-deployment.test | sudo tee -a /etc/hosts"
     a2.vm.provision "shell", inline: "cd /home/vagrant && curl -s https://packages.chef.io/files/current/automate/latest/chef-automate_linux_amd64.zip |gunzip - > chef-automate && chmod +x chef-automate"
     a2.vm.provision "shell", inline: "sudo ./chef-automate init-config"
-    a2.vm.provision "shell", inline: "sudo ./chef-automate deploy config.toml --accept-terms-and-mlsa --skip-preflight"
+    a2.vm.provision "shell", inline: "sudo ./chef-automate deploy config.toml --accept-terms-and-mlsa --skip-preflight > ${GUEST_WKDIR}/automate.deploy.log 2>&1"
     a2.vm.provision "shell", inline: "if [ -f ${GUEST_WKDIR}/automate.license ]; then sudo ./chef-automate license apply \$(< ${GUEST_WKDIR}/automate.license) && sudo ./chef-automate license status ; fi"
     a2.vm.provision "shell", inline: "sudo ./chef-automate admin-token > ${GUEST_WKDIR}/a2-token"
   end
@@ -218,58 +217,36 @@ EOL
   chmod +x rm-node
 }
 
-do_build() {
-  echo "Creating knife.rb..."
+do_build_recreate() {
+  echo "Recreating knife.rb..."
   create_knife_rb
-  echo "Creating roles/base.rb..."
+  echo "Recreating roles/base.rb..."
   create_base_rb
-  echo "Creating Vagrantfile..."
+  echo "Recreating Vagrantfile..."
   create_vagrantfile 2>/dev/null
-  echo "Creating helper scripts..."
-  create_helpers
 }
 
-#
-# set up Host/Local Dev/Workstation
-#
-do_local_setup() {
-  echo "Setting up Host/Local Dev/Workstation..."
-  echo "Configuring knife.rb..."
+do_build() {
+  echo "Creating local files..."
   if [ -f $WKDIR/.chef/knife.rb ] ; then
     echo "knife.rb exists.  Nothing to do here."
   else
+    echo "Creating knife.rb..."
     create_knife_rb
-    knife ssl fetch
   fi
-  echo "knife.rb complete."
-
-  # upload cookbooks
-  echo "Uploading cookbooks..."
-  mkdir -p $WKDIR/cookbooks && cd $WKDIR/cookbooks
-  ckbks=(audit)
-  for c in $ckbks; do
-    if [ "$( knife cookbook list | grep $c )" == "" ]; then
-      knife cookbook site download $c
-      tar -xzvf $c*.tar.gz
-      knife cookbook upload $c
-    else
-      echo "$c exists. Nothing to do here."
-    fi
-  done
-  echo "Cookbook upload complete."
-
-  echo "Uploading Roles..."
-  cd $WKDIR
   if [ -f $WKDIR/roles/base.rb ] ; then
     echo "base.rb exists.  Nothing to do here."
   else
+    echo "Creating roles/base.rb..."
     create_base_rb
-    knife role from file base.rb
   fi
-  echo "base.rb complete."
-  knife cookbook list >/dev/tty 2>&1
-  knife status >/dev/tty 2>&1
-  echo "setting up Host/Local Dev/Workstation complete."
+  if [ -f $WKDIR/Vagrantfile ] ; then
+    echo "Vagrantfile exists.  Nothing to do here."
+  else
+    echo "Creating Vagrantfile..."
+    create_vagrantfile 2>/dev/null
+  fi
+  echo "Local files complete."
 }
 #
 # set up managed nodes
@@ -289,20 +266,7 @@ do_node_setup() {
   echo "Managed nodes set up complete."
 }
 
-#
-# test setup
-do_test() {
-  echo "Begin testing setup..."
-  # check for local setup
-  if [ ! -f $WKDIR/.chef/knife.rb ] ; then do_error "knife.rb doesn't exist" ; fi
-  # test for a functioning chef-server
-  if [[ ! "$(vagrant ssh srvr -c 'hostname -f')" = *"chef-server.test"* ]] ; then do_error "chef-server setup not complete" ; fi
-  # test for a functioning automate
-  if [[ ! "$(vagrant ssh a2 -c 'hostname -f')" = *"automate-deployment.test"* ]] ; then do_error "automate setup not complete" ; fi
-  # test for a validator client proving correct knife config and a working chef-server
-  if [[ ! "$(knife client list)" = *"a2-validator"* ]] ; then do_error "a2-validator doesn't exist, something went wrong" ; fi
-  echo "Testing complete."
-}
+
 #
 # Begin setup
 # the purpose of this file is to be the entry point for setting up a
@@ -310,16 +274,10 @@ do_test() {
 #
 do_setup() {
   echo "Begin Chef Infrastructure setup..."
-  echo "Creating Vagrantfile..."
-  if [ -f $WKDIR/Vagrantfile ] ; then
-    echo "Vagrantfile exists.  Nothing to do here."
-  else
-    create_vagrantfile 2>/dev/null
-  fi
-  echo "Vagrantfile complete."
-  # add chef dir here
+  # create files
+  # add chef dir
   mkdir -p $WKDIR/.chef
-  #######do_build
+  do_build
   echo "Setting up Automate and Chef Server..."
   # Check status of Automate
   a2_mode='provision'
@@ -328,21 +286,32 @@ do_setup() {
   srvr_mode='provision'
   if [ "$(vagrant status srvr | grep 'running (virtualbox)')" == "" ]; then srvr_mode='up' ; fi
   # clean up any last_run leftovers that will get in the way
+  pids=""
   vagrant $a2_mode a2 >/dev/tty 2>&1 &
+  pids[0]=$!
   vagrant $srvr_mode srvr >/dev/tty 2>&1 &
-  wait
-
+  pids[1]=$!
+  # wait for all pids
+  for pid in ${pids[*]}; do
+    wait $pid
+  done
   if [ ! -f $WKDIR/a2-token ] ; then do_error "a2-token doesn't exist"; fi
   add_host 192.168.33.200 chef-server.test
   add_host 192.168.33.199 automate-deployment.test
   echo "Automate and Chef Server set up complete."
 
-  #make baseline profile available with an API call to Automate
+  echo "Make compliance profiles available..."
+  # This is an API call to Automate to make baseline profile available with an
   curl -d '{"name": "linux-baseline", "version": "2.2.0"}' -H "Content-Type: application/json" -H "api-token: $(<./a2-token)" -X POST 'https://automate-deployment.test/api/v0/compliance/profiles?owner=admin' --insecure
 
-  do_local_setup
+  echo "Fetch ssl cert from Chef Server..."
+  knife ssl fetch
+  # upload cookbooks
+  do_cookbook_upload $WKDIR "audit"
+  # upload roles
+  do_roles_upload $WKDIR "base.rb"
   do_node_setup $cnt
-  do_test
+  do_infra_test
   # wrap up and repeat the user instructions that are buried in the logs
   echo "*******************************************************************"
   echo ""
@@ -427,8 +396,8 @@ do_teardown() {
   echo "remove ./roles dir..."
   if ! $is_pre ; then mv -f ./roles ./removing ; fi
 
-# make sure user really wants to delete if they did
-# not pass cli argument -y
+  # make sure user really wants to delete if they did
+  # not pass cli argument -y
   if ! $is_yes ;
   then
     while true; do
@@ -498,7 +467,7 @@ case $1 in
     ;;
   build )
     shift
-    do_build
+    do_build_recreate
     ;;
   backup )
     shift

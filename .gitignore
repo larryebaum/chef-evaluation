@@ -16,3 +16,5 @@ roles/*
 a2-token
 automate.license
 Vagrantfile
+
+*.log

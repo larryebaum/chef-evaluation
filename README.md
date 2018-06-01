@@ -25,6 +25,7 @@ it is a resource hog. Attention to available resources is advised._
 - Clone this repo and `cd chef-evaluation`
 - Create ./automate.license with a valid Automate license. Otherwise, add it when logging in for the first time
 - From the base directory run `chef-infra setup`
+- While that is running... Open a second terminal and run `tail -f automate.deploy.log`
 - Log in instructions are printed to the terminal
 - Look at `chef-infra -h` for more info & teardown instructions
 
