@@ -9,37 +9,24 @@
 # create base role
 # This functionality was put in a role for simplicity, in a production scenario
 # consider using a wrapper cookbook.
-create_jenkins_rb() {
-    mkdir -p $WKDIR/roles && cat > $WKDIR/roles/jenkins.rb <<EOL
-name "jenkins"
-description "jenkins stuff"
-run_list(
-  "role[base]",
-  "recipe[java::default]",
-  "recipe[jenkins::master]"
-)
-default_attributes(
-  "java": {
-    "jdk_version": "8"
-  }
-)
-EOL
-}
-
-create_docjenkins_rb() {
-    mkdir -p $WKDIR/roles && cat > $WKDIR/roles/docjenkins.rb <<EOL
-name "docjenkins"
-description "jenkins stuff"
-run_list(
-  "role[base]",
-  "recipe[java::default]",
-  "recipe[chefinfra-jenkins::master]"
-)
-default_attributes(
-  "java": {
-    "jdk_version": "8"
-  }
-)
+create_ci_srvr_sh() {
+    mkdir -p $WKDIR/bin && cat > $WKDIR/bin/ci_srvr.sh <<EOL
+# install hab
+curl https://raw.githubusercontent.com/habitat-sh/habitat/master/components/hab/install.sh | sudo bash
+# create hab user & group
+sudo groupadd hab && sudo useradd -g hab hab
+# install hab package
+sudo hab pkg install core/jenkins
+# run jenkins
+sudo nohup hab sup run core/jenkins > ${GUEST_WKDIR}/logs/core.jenkins.log 2>&1 &
+# open firewall
+sudo ufw allow 80
+# enable port forwarding
+sudo sysctl net.ipv4.ip_forward=1
+# create port forwarding rule where $1 is the assigned IP of the host and 10.0.2.15 is the local IP of the hab supervisor
+sudo iptables -t nat -A PREROUTING -p tcp -d ${1} --dport 80 -j DNAT --to-destination 10.0.2.15:80
+# print some helpful info
+sudo iptables -t nat -L
 EOL
 }
 
@@ -49,9 +36,8 @@ EOL
 do_start
 do_infra_test
 
-create_jenkins_rb
-do_cookbook_upload $WKDIR "yum-epel windows homebrew packagecloud java runit dpkg_autostart jenkins"
-do_roles_upload $WKDIR "jenkins.rb"
-
-knife node run_list set node10.test "role[jenkins]"
-vagrant ssh node10 -c "sudo chef-client"
+mkdir -p $WKDIR/logs
+create_ci_srvr_sh '192.168.33.10'
+sudo chmod +x $WKDIR/bin/ci_srvr.sh
+vagrant ssh node10 -c "sudo ${GUEST_WKDIR}/bin/ci_srvr.sh"
+do_end

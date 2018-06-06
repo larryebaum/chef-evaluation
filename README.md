@@ -49,6 +49,7 @@ Ideally, `chef-infra setup` will "just work" and give you everything required.  
 ### Development:
 - TODO evaluate hab chef-server & chef-client
 - TODO add windows node
+- TODO move installs into separate scripts add a helper command to print them out
 
 ### Contributions Welcome and encouraged.  Ways to contribute:
 - Open an issue: https://github.com/mtyler/chef-evaluation/issues

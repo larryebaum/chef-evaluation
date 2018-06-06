@@ -7,6 +7,10 @@
 # print start and record to print elapsed time
 #
 START=`date +%s`
+#
+# Static Variables
+#
+GUEST_WKDIR='/opt/a2-testing'
 WKDIR=$PWD
 
 do_start() {

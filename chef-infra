@@ -3,10 +3,6 @@
 # Purpose: Stand up an Automate v2.0 evaluation environment
 
 #
-# Static Variables
-#
-GUEST_WKDIR='/opt/a2-testing'
-#
 # include helper functions
 #
 . helpers.sh
@@ -127,7 +123,7 @@ Vagrant.configure(2) do |config|
     a2.vm.provision "shell", inline: "echo 192.168.33.199 automate-deployment.test | sudo tee -a /etc/hosts"
     a2.vm.provision "shell", inline: "cd /home/vagrant && curl -s https://packages.chef.io/files/current/automate/latest/chef-automate_linux_amd64.zip |gunzip - > chef-automate && chmod +x chef-automate"
     a2.vm.provision "shell", inline: "sudo ./chef-automate init-config"
-    a2.vm.provision "shell", inline: "sudo ./chef-automate deploy config.toml --accept-terms-and-mlsa --skip-preflight > ${GUEST_WKDIR}/automate.deploy.log 2>&1"
+    a2.vm.provision "shell", inline: "sudo ./chef-automate deploy config.toml --accept-terms-and-mlsa --skip-preflight > ${GUEST_WKDIR}/logs/automate.deploy.log 2>&1"
     a2.vm.provision "shell", inline: "if [ -f ${GUEST_WKDIR}/automate.license ]; then sudo ./chef-automate license apply \$(< ${GUEST_WKDIR}/automate.license) && sudo ./chef-automate license status ; fi"
     a2.vm.provision "shell", inline: "sudo ./chef-automate admin-token > ${GUEST_WKDIR}/a2-token"
 #    a2.vm.synced_folder "./bkps/a2", "${GUEST_WKDIR}/bkps/a2", id: "bkps-dir",
@@ -283,6 +279,7 @@ do_setup() {
   # create files
   # add chef dir
   mkdir -p $WKDIR/.chef
+  mkdir -p $WKDIR/logs
   do_build
   echo "Setting up Automate and Chef Server..."
   # Check status of Automate
@@ -314,9 +311,12 @@ do_setup() {
   echo "Make compliance profiles available..."
   # This is an API call to Automate to make baseline profile available with an
   curl -d '{"name": "linux-baseline", "version": "2.2.0"}' -H "Content-Type: application/json" -H "api-token: $(<./a2-token)" -X POST 'https://automate-deployment.test/api/v0/compliance/profiles?owner=admin' --insecure
+  #TODO check for error and print helpful message
   echo "Configure Automate for backups"
   # configure automate to keep backups in the shared directory
-  vagrant ssh a2 -c "if [ ! -f backup_config.toml ]; then sudo printf \"[global.v1.backups.filesystem]\npath = '${GUEST_WKDIR}/bkps/a2'\n\" > backup_config.toml && sudo ./chef-automate config patch backup_config.toml; fi"
+#  vagrant ssh a2 -c "if [ ! -f backup_config.toml ]; then sudo printf \"[global.v1.backups.filesystem]\npath = '${GUEST_WKDIR}/bkps/a2'\n\" > backup_config.toml && sudo ./chef-automate config patch backup_config.toml; fi"
+# # Attempt to work around the inability to restore from ^^ backup shared dir location set ^^ above
+#  vagrant ssh a2 -c "if [ ! -f bak_ln_done ]; then cd /var/opt/chef-automate && sudo mv backups /tmp && sudo ln -s ${GUEST_WKDIR}/bkps/a2 backups && touch /home/vagrant/bak_ln_done; fi"
 
   echo "Fetch ssl cert from Chef Server..."
   knife ssl fetch
@@ -353,6 +353,9 @@ do_backup() {
 # # # # # vagrant ssh a2 -c "if [ ! -f backup_config.toml ]; then sudo printf \"[global.v1.backups.filesystem]\npath = '${GUEST_WKDIR}/bkps/a2'\n\" > backup_config.toml && sudo ./chef-automate config patch backup_config.toml; fi"
   # backup automate
   vagrant ssh a2 -c "sudo ./chef-automate backup create"
+  # copy files to synced_folder
+  vagrant ssh a2 -c "sudo cp -Rp /var/opt/chef-automate/backups/* $GUEST_WKDIR  && sudo cp -Rp /var/opt/chef-automate/backups/automate-elasticsearch-data $GUEST_WKDIR"
+
   echo "Backups complete."
 }
 
@@ -376,8 +379,15 @@ do_restore() {
   cp $WKDIR/bkps/keys/$keys_bak/*.pem $WKDIR/.chef
   # restore chef server
   vagrant ssh srvr -c "sudo /opt/opscode/embedded/bin/knife ssl fetch https://chef-server.test && sudo /opt/opscode/embedded/bin/knife ec restore ${GUEST_WKDIR}/bkps/srvr/${srvr_bak} -s https://chef-server.test --user pivotal --key /etc/opscode/pivotal.pem"
+  # need to copy the backup files out of the vagrant synced_folder becuase the
+  # deployment-service doesn't like
+  vagrant ssh a2 -c "sudo cp -Rp $GUEST_WKDIR/$a2_bak /var/opt/chef-automate/backups && sudo cp -Rp $GUEST_WKDIR/automate-elasticsearch-data /var/opt/chef-automate/backups"
+  # uninstall automate
+  vagrant ssh a2 -c "sudo systemctl stop chef-automate && sudo pkill chef-automate"
+  vagrant ssh a2 -c "sudo rm -rf /hab"
+  vagrant ssh a2 -c "sudo userdel hab"
   # restore automate
-  vagrant ssh a2 -c "sudo ./chef-automate backup restore $a2_bak -b $GUEST_WKDIR/bkps/a2"
+  vagrant ssh a2 -c "sudo ./chef-automate backup restore $a2_bak"
   echo "Restore complete."
 }
 
@@ -411,6 +421,10 @@ do_teardown() {
   if ! $is_pre ; then mv -f ./cookbooks ./removing ; fi
   echo "remove ./roles dir..."
   if ! $is_pre ; then mv -f ./roles ./removing ; fi
+  echo "remove ./bin dir..."
+  if ! $is_pre ; then mv -f ./bin ./removing ; fi
+  echo "remove ./logs dir..."
+  if ! $is_pre ; then mv -f ./logs ./removing ; fi
   echo "remove *.log..."
   if ! $is_pre ; then mv -f *.log ./removing ; fi
 
