@@ -17,7 +17,7 @@ curl https://raw.githubusercontent.com/habitat-sh/habitat/master/components/hab/
 sudo groupadd hab && sudo useradd -g hab hab
 # install hab package
 sudo hab pkg install core/jenkins
-# run jenkins
+# run jenkins in habitat, push it into the background
 sudo nohup hab sup run core/jenkins > ${GUEST_WKDIR}/logs/core.jenkins.log 2>&1 &
 # open firewall
 sudo ufw allow 80

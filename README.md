@@ -29,7 +29,6 @@ it is a resource hog. Attention to available resources is advised._
 - Log in instructions are printed to the terminal
 - Look at `chef-infra -h` for more info & teardown instructions
 
-
 ### Troubleshooting:
 Ideally, `chef-infra setup` will "just work" and give you everything required.  However, this isn't a perfect world.  If things don't work here are a few things to try.
 1. Did a2 converge w/out error? Does ./a2-token exist? If no, try `vagrant provision a2`
@@ -39,8 +38,19 @@ Ideally, `chef-infra setup` will "just work" and give you everything required.  
 ### Manage nodes
 - Create/install a single node only: `vagrant up [a2|srvr|node1[n]]`
 - Retry creation of a single node: `vagrant provision [a2|srvr|node1[n]]`
-### Chef Workstation:
+
+---
+## Chef Workstation:
+Once initial setup is complete and the Vagrantfile is created, Chef Workstation can be
+setup with the following command
 - `vagrant up work`
+
+---
+## CI Server:
+Once initial setup is complete and the Chef Infrastructure is working, node10 can be turned into a Jenkins server by running the following command
+- `pipeline`
+
+---
 
 ### Patterns:
 - Bootstrap during provisioning: see `Vagrantfile` lines with `node.vm.provisioning`.  The validator key is shared here using the synched folder.

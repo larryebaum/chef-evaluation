@@ -354,7 +354,7 @@ do_backup() {
   # backup automate
   vagrant ssh a2 -c "sudo ./chef-automate backup create"
   # copy files to synced_folder
-  vagrant ssh a2 -c "sudo cp -Rp /var/opt/chef-automate/backups/* $GUEST_WKDIR  && sudo cp -Rp /var/opt/chef-automate/backups/automate-elasticsearch-data $GUEST_WKDIR"
+  vagrant ssh a2 -c "sudo cp -Rp /var/opt/chef-automate/backups/* $GUEST_WKDIR/bkps/a2  && sudo cp -Rp /var/opt/chef-automate/backups/automate-elasticsearch-data $GUEST_WKDIR/bkps/a2"
 
   echo "Backups complete."
 }
