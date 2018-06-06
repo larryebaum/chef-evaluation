@@ -5,10 +5,14 @@
 .chef/*
 .vagrant
 .vagrant/*
-bkps
-bkps/*
 cookbooks
 cookbooks/*
+bin
+bin/*
+bkps
+bkps/*
+logs
+logs/*
 pkgs
 pkgs/*
 roles
@@ -16,5 +20,3 @@ roles/*
 a2-token
 automate.license
 Vagrantfile
-
-*.log
