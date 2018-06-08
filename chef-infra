@@ -23,12 +23,7 @@ usage() {
   echo "  options:"
   echo "  -h,--help    show this message"
   echo ""
-  echo "setup: Creat a local Chef Infrastructure"
-  echo ""
-  echo "  options:"
-  echo "  -c, --count requires an integer. Number of nodes to include in the fleet (default: 2)"
-  echo ""
-  echo "build: Create/overwrite local files: Vagrantfile,"
+  echo "write: Create/overwrite local files: Vagrantfile,"
   echo "              knife.rb, base.rb, etc."
   echo ""
   echo "backup: create snapshots of Automate and Chef Server"
@@ -40,6 +35,14 @@ usage() {
   echo "  -a, --automate Directory in ./bkps/a2 containing Automate backup (default: latest modified)"
   echo "  -k, --keys Directory in ./bkps/keys containing backup of keys (default: latest modified)"
   echo "  -s, --server Directory in ./bkps/srvr containing Chef Server backup (default: latest modified)"
+  echo ""
+  echo "setup: Creat a local Chef Infrastructure"
+  echo ""
+  echo "  options:"
+  echo "  -c, --count Number of nodes to create (integer, default: 2)"
+  echo "  -b, --builder add an on-prem builder"
+  echo "  -w, --workstation add a chef workstation"
+  echo "  -x exclude infrastructure (Automate, Server, Nodes)"
   echo ""
   echo "teardown: Remove files and objects created"
   echo "  options:"
@@ -101,7 +104,7 @@ create_vagrantfile() {
 # vi: set ft=ruby :
 
 # this is set high to give some flexiblity.
-# ideally this should be passed from an environment var
+# ideally this would be passed from an environment var
 NODE_COUNT = 10
 
 Vagrant.configure(2) do |config|
@@ -117,18 +120,7 @@ Vagrant.configure(2) do |config|
     a2.vm.hostname = 'automate-deployment.test'
     a2.vm.network 'private_network', ip: '192.168.33.199'
     a2.vm.boot_timeout = 600
-    a2.vm.provision "shell", inline: "apt-get update && apt-get install -y unzip ntp"
-    a2.vm.provision "shell", inline: "sysctl -w vm.max_map_count=262144"
-    a2.vm.provision "shell", inline: "sysctl -w vm.dirty_expire_centisecs=20000"
-    a2.vm.provision "shell", inline: "echo 192.168.33.199 automate-deployment.test | sudo tee -a /etc/hosts"
-    a2.vm.provision "shell", inline: "cd /home/vagrant && curl -s https://packages.chef.io/files/current/automate/latest/chef-automate_linux_amd64.zip |gunzip - > chef-automate && chmod +x chef-automate"
-    a2.vm.provision "shell", inline: "sudo ./chef-automate init-config"
-    a2.vm.provision "shell", inline: "sudo ./chef-automate deploy config.toml --accept-terms-and-mlsa --skip-preflight > ${GUEST_WKDIR}/logs/automate.deploy.log 2>&1"
-    a2.vm.provision "shell", inline: "if [ -f ${GUEST_WKDIR}/automate.license ]; then sudo ./chef-automate license apply \$(< ${GUEST_WKDIR}/automate.license) && sudo ./chef-automate license status ; fi"
-    a2.vm.provision "shell", inline: "sudo ./chef-automate admin-token > ${GUEST_WKDIR}/a2-token"
-#    a2.vm.synced_folder "./bkps/a2", "${GUEST_WKDIR}/bkps/a2", id: "bkps-dir",
-#                        owner: "hab",
-#                        group: "hab",
+    a2.vm.provision "shell", inline: "${GUEST_WKDIR}/tmp/a2_vm_provision.sh /opt/a2-testing"
   end
 
   config.vm.define :srvr do |srvr|
@@ -142,16 +134,7 @@ Vagrant.configure(2) do |config|
     srvr.vm.network :private_network, ip: "192.168.33.200"
     srvr.ssh.username = "vagrant"
     srvr.ssh.password = "vagrant"
-    srvr.vm.provision "shell", inline: "echo 192.168.33.199 automate-deployment.test | sudo tee -a /etc/hosts"
-    srvr.vm.provision "shell", inline: "echo 192.168.33.200 chef-server.test | sudo tee -a /etc/hosts"
-    srvr.vm.provision "shell", inline: "if [ ! -f ${GUEST_WKDIR}/pkgs/srvr/*.deb ]; then mkdir -p ${GUEST_WKDIR}/pkgs/srvr; cd ${GUEST_WKDIR}/pkgs/srvr; wget -q https://packages.chef.io/files/stable/chef-server/12.17.33/ubuntu/16.04/chef-server-core_12.17.33-1_amd64.deb; fi"
-    srvr.vm.provision "shell", inline: "dpkg -i ${GUEST_WKDIR}/pkgs/srvr/*.deb && sudo chef-server-ctl reconfigure"
-    srvr.vm.provision "shell", inline: "if [ \"\$(sudo chef-server-ctl user-show | grep 'admin')\" == \"\" ]; then sudo chef-server-ctl user-create admin first last admin@example.com 'adminpwd' --filename ${GUEST_WKDIR}/.chef/admin.pem; fi"
-    srvr.vm.provision "shell", inline: "if [ \"\$(sudo chef-server-ctl org-show | grep 'a2')\" == \"\" ]; then sudo chef-server-ctl org-create a2 'automate2' --association_user admin --filename ${GUEST_WKDIR}/.chef/a2-validator.pem; fi"
-    srvr.vm.provision "shell", inline: "while [ ! -f ${GUEST_WKDIR}/a2-token ] ; do sleep 5 && echo '.'; done && sudo chef-server-ctl set-secret data_collector token \$(< ${GUEST_WKDIR}/a2-token) && sudo chef-server-ctl restart nginx && sudo chef-server-ctl restart opscode-erchef"
-    srvr.vm.provision "shell", inline: "echo \"data_collector['root_url'] = 'https://automate-deployment.test/data-collector/v0/'\" | sudo tee -a /etc/opscode/chef-server.rb"
-    srvr.vm.provision "shell", inline: "echo \"profiles['root_url'] = 'https://automate-deployment.test'\" | sudo tee -a /etc/opscode/chef-server.rb"
-    srvr.vm.provision "shell", inline: "sudo chef-server-ctl reconfigure"
+    srvr.vm.provision "shell", inline: "${GUEST_WKDIR}/tmp/srvr_vm_provision.sh /opt/a2-testing"
   end
 
   NODE_COUNT.times do |i|
@@ -167,21 +150,7 @@ Vagrant.configure(2) do |config|
       node.vm.network :private_network, ip: "192.168.33.1#{i}"
       node.ssh.username = "vagrant"
       node.ssh.password = "vagrant"
-      node.vm.provision "shell", inline: "echo 192.168.33.200 chef-server.test | sudo tee -a /etc/hosts"
-      node.vm.provision "shell", inline: "echo 192.168.33.1#{i} #{node_id}.test | sudo tee -a /etc/hosts"
-      node.vm.provision "shell", inline: "if [ ! -f ${GUEST_WKDIR}/pkgs/client/*.deb ]; then mkdir -p ${GUEST_WKDIR}/pkgs/client; cd ${GUEST_WKDIR}/pkgs/client; wget -q https://packages.chef.io/files/stable/chef/14.1.12/ubuntu/16.04/chef_14.1.12-1_amd64.deb; fi"
-      node.vm.provision "shell", inline: "dpkg -i ${GUEST_WKDIR}/pkgs/client/*.deb"
-      node.vm.provision "shell", inline: "sudo mkdir -p /etc/chef && cat >/etc/chef/client.rb <<EOL
-log_level        :info
-log_location     STDOUT
-chef_server_url  'https://chef-server.test/organizations/a2'
-validation_client_name 'a2-validator'
-validation_key '${GUEST_WKDIR}/.chef/a2-validator.pem'
-client_key '/etc/chef/client.pem'
-ssl_verify_mode  :verify_none
-EOL"
-      node.vm.provision "shell", inline: "sudo /usr/bin/chef-client -r 'role[base]'"
-      node.vm.provision "shell", inline: "(crontab -l 2>/dev/null; echo \"*/5 * * * * sudo /usr/bin/chef-client >/dev/null 2>&1\") | crontab -"
+      node.vm.provision "shell", inline: "${GUEST_WKDIR}/tmp/node_vm_provision.sh /opt/a2-testing #{i}"
     end
   end
 
@@ -196,8 +165,21 @@ EOL"
     work.vm.network :private_network, ip: "192.168.33.198"
     work.ssh.username = "vagrant"
     work.ssh.password = "vagrant"
-    work.vm.provision "shell", inline: "wget -q https://packages.chef.io/files/stable/chef-workstation/0.1.120/ubuntu/16.04/chef-workstation_0.1.120-1_amd64.deb && sudo dpkg -i chef*.deb"
-    work.vm.provision "shell", inline: "chef-run -v"
+    work.vm.provision "shell", inline: "${GUEST_WKDIR}/tmp/work_vm_provision.sh"
+  end
+
+  config.vm.define :bldr do |bldr|
+    bldr.vm.provider "virtualbox" do |vb|
+      vb.memory = 512
+      vb.cpus = 2
+    end
+    bldr.vm.box = "bento/ubuntu-16.04"
+    bldr.vm.hostname = "bldr.test"
+    bldr.vm.synced_folder ".", "${GUEST_WKDIR}", create: true
+    bldr.vm.network :private_network, ip: "192.168.33.197"
+    bldr.ssh.username = "vagrant"
+    bldr.ssh.password = "vagrant"
+    bldr.vm.provision "shell", inline: "${GUEST_WKDIR}/tmp/bldr_vm_provision.sh"
   end
 
 end
@@ -253,8 +235,12 @@ do_build() {
 #
 # set up managed nodes
 # $1 = node count
-do_node_setup() {
+setup_nodes() {
   echo "Setting up managed nodes..."
+  mkdir -p $WKDIR/tmp
+  cp $WKDIR/scripts/setup_node.sh $WKDIR/tmp/node_vm_provision.sh
+  chmod +x $WKDIR/tmp/node_vm_provision.sh
+
   for (( i=0; i<$1; i++ ))
   do
     if [ "$(vagrant status node1$i | grep 'running (virtualbox)')" == "" ];
@@ -267,19 +253,21 @@ do_node_setup() {
   done
   echo "Managed nodes set up complete."
 }
-
-
 #
 # Begin setup
 # the purpose of this file is to be the entry point for setting up a
 # local test/evaluation environment for Chef Automate v2
 #
-do_setup() {
+setup_infra() {
   echo "Begin Chef Infrastructure setup..."
   # create files
   # add chef dir
   mkdir -p $WKDIR/.chef
   mkdir -p $WKDIR/logs
+  mkdir -p $WKDIR/tmp
+  cp $WKDIR/scripts/setup_automate.sh $WKDIR/tmp/a2_vm_provision.sh && chmod +x $WKDIR/tmp/a2_vm_provision.sh
+  cp $WKDIR/scripts/setup_server.sh $WKDIR/tmp/srvr_vm_provision.sh && chmod +x $WKDIR/tmp/srvr_vm_provision.sh
+
   do_build
   echo "Setting up Automate and Chef Server..."
   # Check status of Automate
@@ -324,7 +312,7 @@ do_setup() {
   do_cookbook_upload $WKDIR "audit"
   # upload roles
   do_roles_upload $WKDIR "base.rb"
-  do_node_setup $cnt
+  setup_nodes $cnt
   do_infra_test
   # wrap up and repeat the user instructions that are buried in the logs
   echo "*******************************************************************"
@@ -337,6 +325,23 @@ do_setup() {
   echo "Chef Infrastructure setup completed."
   echo "*******************************************************************"
 }
+
+setup_workstation() {
+  mkdir -p $WKDIR/tmp
+  cp $WKDIR/scripts/setup_workstation.sh $WKDIR/tmp/work_vm_provision.sh
+  chmod +x $WKDIR/tmp/work_vm_provision.sh
+  vagrant up work
+  add_host workstation.test 192.168.33.198
+}
+
+setup_builder() {
+  mkdir -p $WKDIR/tmp
+  cp $WKDIR/scripts/setup_builder.sh $WKDIR/tmp/bldr_vm_provision.sh
+  chmod +x $WKDIR/tmp/bldr_vm_provision.sh
+  vagrant up bldr
+  add_host builder.test 192.168.33.197
+}
+
 
 do_backup() {
   echo "Begin taking backups..."
@@ -355,6 +360,9 @@ do_backup() {
   vagrant ssh a2 -c "sudo ./chef-automate backup create"
   # copy files to synced_folder
   vagrant ssh a2 -c "sudo cp -Rp /var/opt/chef-automate/backups/* $GUEST_WKDIR/bkps/a2  && sudo cp -Rp /var/opt/chef-automate/backups/automate-elasticsearch-data $GUEST_WKDIR/bkps/a2"
+  # keep a copy of the credentials file
+  vagrant ssh a2 -c "sudo cat ./automate-credentials.toml > $GUEST_WKDIR/bkps/keys/$d/automate-credentials.toml"
+
 
   echo "Backups complete."
 }
@@ -381,17 +389,25 @@ do_restore() {
   vagrant ssh srvr -c "sudo /opt/opscode/embedded/bin/knife ssl fetch https://chef-server.test && sudo /opt/opscode/embedded/bin/knife ec restore ${GUEST_WKDIR}/bkps/srvr/${srvr_bak} -s https://chef-server.test --user pivotal --key /etc/opscode/pivotal.pem"
   # need to copy the backup files out of the vagrant synced_folder becuase the
   # deployment-service doesn't like
-  vagrant ssh a2 -c "sudo cp -Rp $GUEST_WKDIR/$a2_bak /var/opt/chef-automate/backups && sudo cp -Rp $GUEST_WKDIR/automate-elasticsearch-data /var/opt/chef-automate/backups"
+  vagrant ssh a2 -c "sudo cp -Rp $GUEST_WKDIR/bkps/a2/$a2_bak /var/opt/chef-automate/backups && sudo cp -Rp $GUEST_WKDIR/bkps/a2/automate-elasticsearch-data /var/opt/chef-automate/backups"
   # uninstall automate
   vagrant ssh a2 -c "sudo systemctl stop chef-automate && sudo pkill chef-automate"
   vagrant ssh a2 -c "sudo rm -rf /hab"
   vagrant ssh a2 -c "sudo userdel hab"
   # restore automate
   vagrant ssh a2 -c "sudo ./chef-automate backup restore $a2_bak"
+  # reset the access_token
+  mv $WKDIR/a2-token $WKDIR/a2-token.bak
+  vagrant ssh a2 -c "sudo ./chef-automate admin-token > $GUEST_WKDIR/a2-token"
+  vagrant ssh srvr -c "sudo chef-server-ctl set-secret data_collector token \$(< $GUEST_WKDIR/a2-token) && sudo chef-server-ctl restart nginx && sudo chef-server-ctl restart opscode-erchef"
+  echo ""
+  vagrant ssh a2 -c "sudo cat ./automate-credentials.toml"
+  echo ""
   echo "Restore complete."
+  #TODO redo the token
 }
 
-do_teardown() {
+teardown_infra() {
   echo "Begin Chef Infrastructure teardown"
   if $is_pre ; then echo "-p specified. Only printing actions of this script..." ; fi
   echo "create temporary removing dir..."
@@ -399,6 +415,9 @@ do_teardown() {
 
   remove_host automate-deployment.test $is_pre
   remove_host chef-server.test $is_pre
+  remove_host workstation.test $is_pre
+  remove_host builder.test $is_pre
+
   #TODO remove nodeX.test
 
   if $is_full ; then
@@ -425,8 +444,8 @@ do_teardown() {
   if ! $is_pre ; then mv -f ./bin ./removing ; fi
   echo "remove ./logs dir..."
   if ! $is_pre ; then mv -f ./logs ./removing ; fi
-  echo "remove *.log..."
-  if ! $is_pre ; then mv -f *.log ./removing ; fi
+  echo "remove ./tmp dir..."
+  if ! $is_pre ; then mv -f ./tmp ./removing ; fi
 
   # make sure user really wants to delete if they did
   # not pass cli argument -y
@@ -454,7 +473,7 @@ do_teardown() {
   if ! $is_pre ; then mv -f ./.vagrant ./removing ; fi
   echo "nuke the temporary ./removing dir..."
   if ! $is_pre ; then rm -rf ./removing ; fi
-  echo " "
+  echo ""
   echo "Teardown of Chef Infrastructure complete. Thanks for playing... :)"
 }
 
@@ -470,19 +489,26 @@ do_troubleshoot() {
 #
 # Begin chef-infra.sh
 #
+do_start
 # initalize default flags
 cnt=2
 is_full=false
 is_yes=false
 is_pre=false
+is_bldr=false
+is_work=false
+is_infra=true
 
-do_start
 # parse command line
 case $1 in
-  setup)
+  setup )
     shift
-    while getopts ":c:h" o; do
+    while getopts ":c:bwhx" o; do
       case $o in
+        b|builder )
+          shift
+          is_bldr=true
+          ;;
         c|count )
           cnt=$OPTARG
           echo "Create $cnt nodes"
@@ -490,16 +516,22 @@ case $1 in
         h|help )
           usage
           ;;
+        w|workstation )
+          shift
+          is_work=true
+          ;;
+        x )
+          shift
+          is_infra=false
+          ;;
         * )
           usage
           ;;
       esac
     done
-    do_setup
-    ;;
-  build )
-    shift
-    do_build_recreate
+    if [ "$is_infra" = true ]; then setup_infra; fi
+    if [ "$is_work" = true ]; then setup_workstation; fi
+    if [ "$is_bldr" = true ]; then setup_builder; fi
     ;;
   backup )
     shift
@@ -532,8 +564,8 @@ case $1 in
     do_restore
     ;;
   log )
-    vagrant ssh a2 -c 'journalctl -u chef-automate -f'
     shift
+    vagrant ssh a2 -c 'journalctl -u chef-automate -f'
     ;;
   teardown )
     shift
@@ -558,15 +590,22 @@ case $1 in
           ;;
       esac
     done
-    do_teardown
+    teardown_infra
     ;;
   troubleshoot )
+    shift
     do_troubleshoot
     ;;
-  test)
+  test )
+    shift
     do_test
     ;;
+  write )
+    shift
+    do_build_recreate
+    ;;
   * )
+    shift
     usage
     ;;
 esac

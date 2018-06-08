@@ -17,6 +17,10 @@ pkgs
 pkgs/*
 roles
 roles/*
+tmp
+tmp/*
+
 a2-token
 automate.license
+bldr.env
 Vagrantfile
