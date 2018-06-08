@@ -10,21 +10,13 @@
 # helper functions
 #
 usage() {
-  echo "Usage: $0 [command] [options]"
+  echo "Usage: $0 [Sub Command] [options]"
   echo ""
-  echo "Available Commands:"
-  echo "    setup"
-  echo "    build"
-  echo "    backup"
-  echo "    restore"
-  echo "    teardown"
-  echo "    troubleshoot"
+  echo "Available Sub Commands:"
+  echo "    setup | backup | log | restore | teardown | write"
   echo ""
   echo "  options:"
   echo "  -h,--help    show this message"
-  echo ""
-  echo "write: Create/overwrite local files: Vagrantfile,"
-  echo "              knife.rb, base.rb, etc."
   echo ""
   echo "backup: create snapshots of Automate and Chef Server"
   echo ""
@@ -52,6 +44,9 @@ usage() {
   echo "               by default."
   echo "  -p,--pretend just list what will be done"
   echo "  -y,--yes     answer yes to all prompts"
+  echo ""
+  echo "write: Create/overwrite local files: Vagrantfile,"
+  echo "              knife.rb, base.rb, etc."
   echo ""
   echo "troubleshoot: Print useful cmds"
 
@@ -359,7 +354,7 @@ do_backup() {
   # backup automate
   vagrant ssh a2 -c "sudo ./chef-automate backup create"
   # copy files to synced_folder
-  vagrant ssh a2 -c "sudo cp -Rp /var/opt/chef-automate/backups/* $GUEST_WKDIR/bkps/a2  && sudo cp -Rp /var/opt/chef-automate/backups/automate-elasticsearch-data $GUEST_WKDIR/bkps/a2"
+  vagrant ssh a2 -c "sudo cp -Rfp /var/opt/chef-automate/backups/* $GUEST_WKDIR/bkps/a2  && sudo cp -Rfp /var/opt/chef-automate/backups/automate-elasticsearch-data $GUEST_WKDIR/bkps/a2"
   # keep a copy of the credentials file
   vagrant ssh a2 -c "sudo cat ./automate-credentials.toml > $GUEST_WKDIR/bkps/keys/$d/automate-credentials.toml"
 

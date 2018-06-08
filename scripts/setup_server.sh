@@ -23,6 +23,10 @@ while [ ! -f ${GUEST_WKDIR}/a2-token ] ; do
   sleep 5 && echo '.'
 done
 sudo chef-server-ctl set-secret data_collector token $(< ${GUEST_WKDIR}/a2-token) && sudo chef-server-ctl restart nginx && sudo chef-server-ctl restart opscode-erchef
+# configure data collector to push data to automate
 echo "data_collector['root_url'] = 'https://automate-deployment.test/data-collector/v0/'" | sudo tee -a /etc/opscode/chef-server.rb
+# configure chef server to know where to fetch compliance profiles
 echo "profiles['root_url'] = 'https://automate-deployment.test'" | sudo tee -a /etc/opscode/chef-server.rb
+# configure chef server to allow for larger requests.  typically needed when running larger compliance profiles
+echo "opscode_erchef['max_request_size'] = 2000000" | sudo tee -a /etc/opscode/chef-server.rb
 sudo chef-server-ctl reconfigure
