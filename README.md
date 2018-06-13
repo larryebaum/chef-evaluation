@@ -1,5 +1,6 @@
 # Chef Evaluation
-## Purpose: Stand up an Automate v2.0 evaluation environment (aka: YACv?, Yet Another Chef server setup)
+## Purpose: Stand up an Automate v2.0 evaluation environment 
+## yacs - Yet Another Chef Server ~cookbook~ _setup_: we enjoy shaving
 - Chef Automate v2.0
 - Chef Server (Manage-less)
 - X Nodes to Bootstrap and manage
