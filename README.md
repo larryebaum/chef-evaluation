@@ -5,11 +5,13 @@
 - X Nodes to Bootstrap and manage
 
 `chef-infra` is a bash script that will create or download all the resources needed to
-setup an evaluation of the Chef Infrastructure.
+setup an evaluation of the Chef Infrastructure. For a production scenario, cookbooks and
+the Chef DSL should be used. bash was used here to make getting started consumable
+by humans that may be new to Chef and/or automation.
 
 ### Prereqs:
 - [Vitualbox](https://www.virtualbox.org/wiki/Downloads) (tested v5.2.12)
-- [vagrant](https://www.vagrantup.com/downloads.html) (tested v2.1.1)
+- [vagrant](https://www.vagrantup.com/downloads.html) (tested => v2.1.1)
 - [chefdk](https://downloads.chef.io/chefdk/3.0.36) (tested v2.5.3)
 - tested on MacBook Pro w/ 7GB free physical mem where a2+chef+2 nodes used 4GB memory & 1GB on disk
 

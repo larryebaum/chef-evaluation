@@ -1,6 +1,7 @@
 #!/bin/bash
 GUEST_WKDIR=$1
 NODE_ID=$2
+apt-get update && apt-get install -y ntp
 echo 192.168.33.200 chef-server.test | sudo tee -a /etc/hosts
 echo 192.168.33.1${NODE_ID} node1${NODE_ID}.test | sudo tee -a /etc/hosts
 if [ ! -f ${GUEST_WKDIR}/pkgs/client/*.deb ]; then mkdir -p ${GUEST_WKDIR}/pkgs/client; cd ${GUEST_WKDIR}/pkgs/client; wget -q https://packages.chef.io/files/stable/chef/14.1.12/ubuntu/16.04/chef_14.1.12-1_amd64.deb; fi

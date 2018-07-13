@@ -33,6 +33,7 @@ usage() {
   echo "  options:"
   echo "  -c, --count Number of nodes to create (integer, default: 2)"
   echo "  -b, --builder add an on-prem builder"
+  echo "  -p, --pipeline add a cicd cookbook pipeline"
   echo "  -w, --workstation add a chef workstation"
   echo "  -x exclude infrastructure (Automate, Server, Nodes)"
   echo ""
@@ -45,10 +46,11 @@ usage() {
   echo "  -p,--pretend just list what will be done"
   echo "  -y,--yes     answer yes to all prompts"
   echo ""
+  echo "troubleshoot: Print useful cmds"
+  echo ""
   echo "write: Create/overwrite local files: Vagrantfile,"
   echo "              knife.rb, base.rb, etc."
-  echo ""
-  echo "troubleshoot: Print useful cmds"
+
 
   exit 0;
 }
@@ -177,6 +179,19 @@ Vagrant.configure(2) do |config|
     bldr.vm.provision "shell", inline: "${GUEST_WKDIR}/tmp/bldr_vm_provision.sh"
   end
 
+  config.vm.define :cicd do |cicd|
+    cicd.vm.provider "virtualbox" do |vb|
+      vb.memory = 512
+      vb.cpus = 2
+    end
+    cicd.vm.box = "bento/ubuntu-16.04"
+    cicd.vm.hostname = "cicd.test"
+    cicd.vm.synced_folder ".", "${GUEST_WKDIR}", create: true
+    cicd.vm.network :private_network, ip: "192.168.33.196"
+    cicd.ssh.username = "vagrant"
+    cicd.ssh.password = "vagrant"
+    cicd.vm.provision "shell", inline: "${GUEST_WKDIR}/tmp/cicd_vm_provision.sh"
+  end
 end
 EOL
 }
@@ -212,6 +227,7 @@ do_build() {
   else
     echo "Creating knife.rb..."
     create_knife_rb
+    sed -e s/admin/cicdsvc/g $WKDIR/.chef/knife.rb > $WKDIR/.chef/cicdsvc-knife.rb
   fi
   if [ -f $WKDIR/roles/base.rb ] ; then
     echo "base.rb exists.  Nothing to do here."
@@ -337,6 +353,27 @@ setup_builder() {
   add_host builder.test 192.168.33.197
 }
 
+setup_cicd() {
+  echo ""
+  echo ""
+  echo ""
+  echo "Note! ...  cicd uses the jenkinsci/blueocean docker image"
+  echo "PreReqs include:"
+  echo "    Docker https://www.docker.com/"
+  echo "    Manual configuration of Jenkins https://jenkins.io/projects/blueocean/"
+  echo "    A Dockerfile, Jenkinsfile, .kitchen.docker.yml copied and modified"
+  echo "    accordingly from https://www.github.com/mtyler/chef-infra-base"
+  echo ""
+
+  ./scripts/setup_jenkins.sh
+  echo ""
+  echo "Steps:"
+  echo "    1. Navigate to http://localhost:8080/blue"
+  echo "    2. Open a shell on the image to get initial password:"
+  echo "         docker exec -it jenkins-blueocean bash"
+  echo "    3. Fork https://www.github.com/mtyler/chef-infra-base"
+  echo "    4. Follow jenkins setup wizard to connect the cookbook"
+}
 
 do_backup() {
   echo "Begin taking backups..."
@@ -493,12 +530,13 @@ is_pre=false
 is_bldr=false
 is_work=false
 is_infra=true
+is_cicd=false
 
 # parse command line
 case $1 in
   setup )
     shift
-    while getopts ":c:bwhx" o; do
+    while getopts ":c:bpwhx" o; do
       case $o in
         b|builder )
           shift
@@ -510,6 +548,9 @@ case $1 in
           ;;
         h|help )
           usage
+          ;;
+        p|pipeline )
+          is_cicd=true
           ;;
         w|workstation )
           shift
@@ -527,6 +568,7 @@ case $1 in
     if [ "$is_infra" = true ]; then setup_infra; fi
     if [ "$is_work" = true ]; then setup_workstation; fi
     if [ "$is_bldr" = true ]; then setup_builder; fi
+    if [ "$is_cicd" = true ]; then setup_cicd; fi
     ;;
   backup )
     shift
