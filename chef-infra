@@ -478,9 +478,11 @@ teardown_infra() {
   if ! $is_pre ; then mv -f ./logs ./removing ; fi
   echo "remove ./tmp dir..."
   if ! $is_pre ; then mv -f ./tmp ./removing ; fi
+  echo "remove bldr.env..."
+  if ! $is_pre ; then mv -f bldr.env ./removing ; fi
 
-  # make sure user really wants to delete if they did
-  # not pass cli argument -y
+
+  # make sure user really wants to delete unless `-y` was specified
   if ! $is_yes ;
   then
     while true; do
@@ -505,6 +507,13 @@ teardown_infra() {
   if ! $is_pre ; then mv -f ./.vagrant ./removing ; fi
   echo "nuke the temporary ./removing dir..."
   if ! $is_pre ; then rm -rf ./removing ; fi
+  echo "removing docker jenkinsci-blueocean image and jenkins-data volume..."
+  if ! $is_pre ; then
+    docker stop jenkinsci-blueocean
+    docker rmi jenkinsci/blueocean
+    docker rmi evarga/jenkins-slave
+    docker volume rm jenkins-data
+  fi
   echo ""
   echo "Teardown of Chef Infrastructure complete. Thanks for playing... :)"
 }
@@ -527,9 +536,13 @@ cnt=2
 is_full=false
 is_yes=false
 is_pre=false
+# is builder going to be created?
 is_bldr=false
+# is workstation going to be created?
 is_work=false
+# is infrastructure going to be created?
 is_infra=true
+# is a pipeline going to be created?
 is_cicd=false
 
 # parse command line

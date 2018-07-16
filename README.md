@@ -38,21 +38,26 @@ Ideally, `chef-infra setup` will "just work" and give you everything required.  
 
 ---
 ## Chef Workstation:
-Once initial setup is complete and/or the Vagrantfile is created, Chef Workstation can be
-setup with the following command
+[Chef Workstation](https://www.chef.sh/about/chef-workstation/) is a single package with a lot of helpful tools. Adding the `-w` option will include a Chef Workstation in the setup
 - `chef-infra setup -w`
 
 ---
 ## Habitat on-prem Builder:
-Once initial setup is complete and/or the Vagrantfile is created, Habitat Builder can be
-setup with the following command
+Habitat Builder can be included in the setup with the `-b` option.  [Habitat Builder](https://www.habitat.sh/docs/using-builder/) is also available in the inter-cloud.
 - `chef-infra setup -b`
 
-
 ---
-## CI Server:
-Once initial setup is complete and the Chef Infrastructure is working, node10 can be turned into a Jenkins server by running the following command
-- `pipeline`
+## CICD pipeline:
+Adding the `-p` option to the setup command will create a Jenkins Blueocean instance.  Note: This requires Docker and currently some manual setup.  
+- `chef-infra setup -p` once that completes, continue.
+- To get the activation key run `docker exec -it jenkinsci-blueocean cat /var/jenkins_home/secrets/initialAdminPassword`
+- Once up, navigate to http://localhost:8080/blue
+- Follow instructions and install all recommended plugins.
+- In Github, Fork the repo https://github.com/mtyler/chef-infra-base
+- Create a github access token:
+  - In github, top right click your avatar > Settings > Developer Settings > Personal Access Settings.
+  - Generate a new token with Full control of Repo, User:email
+  - Use this token to create a pipeline for your newly forked repo     
 
 ---
 
@@ -61,9 +66,8 @@ Once initial setup is complete and the Chef Infrastructure is working, node10 ca
 - Backup: see `chef-infra do_backup()`
 
 ### Development:
-- TODO evaluate hab chef-server & chef-client
+- TODO habichef pipeline
 - TODO add windows node
-- TODO move installs into separate scripts add a helper command to print them out
 
 ### Contributions Welcome and encouraged.  Ways to contribute:
 - Open an issue: https://github.com/mtyler/chef-evaluation/issues
