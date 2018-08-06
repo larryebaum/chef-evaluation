@@ -1,0 +1,13 @@
+FROM jenkinsci/blueocean
+ARG JENKINS_HOME=/var/jenkins_home
+ARG KNIFE_RB=./.chef/knife.rb
+ARG CLIENT_KEY=./.chef/client.pem
+# CHEF_SERVER_ADD_HOST should be the argument passed to --add-host
+# `docker run --add-host $CHEF_SERVER_ADD_HOST`
+ARG CHEF_SERVER_ADD_HOST=chef-server.test:192.168.33.200
+# prereqs
+COPY $KNIFE_RB $JENKINS_HOME/
+COPY $CLIENT_KEY $JENKINS_HOME/
+ENV CHEF_SERVER_ADD_HOST=$CHEF_SERVER_ADD_HOST
+ENV KNIFE_RB=$JENKINS_HOME/$KNIFE_RB
+ENV CLIENT_KEY=$JENKINS_HOME/$CLIENT_KEY

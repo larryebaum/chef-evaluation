@@ -21,6 +21,7 @@ tmp
 tmp/*
 
 a2-token
+*.github-token
 automate.license
 bldr.env
 Vagrantfile
