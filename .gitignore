@@ -17,6 +17,12 @@ pkgs
 pkgs/*
 roles
 roles/*
+scripts/basic-setup.groovy
+scripts/*knife.rb
+scripts/jenkins.install.*
+scripts/jenkins.model.*
+scripts/*.pem
+
 tmp
 tmp/*
 
