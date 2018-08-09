@@ -1,4 +1,5 @@
 FROM jenkinsci/blueocean
+# ARG vals can/should be overridden during docker build
 ARG JENKINS_HOME=/var/jenkins_home
 ARG KNIFE_RB=knife.rb
 ARG CLIENT_KEY=client.pem
@@ -12,11 +13,11 @@ COPY plugins.txt $JENKINS_HOME/
 RUN /usr/local/bin/install-plugins.sh < $JENKINS_HOME/plugins.txt
 # copy init script
 COPY basic-setup.groovy $JENKINS_HOME/init.groovy.d/
+# copy files that jenkins expects in order to disable setupWizard
 COPY jenkins.install.InstallUtil.lastExecVersion $JENKINS_HOME/
 COPY jenkins.install.UpgradeWizard.state $JENKINS_HOME/
 COPY jenkins.model.JenkinsLocationConfiguration.xml $JENKINS_HOME/
-#####ENV JAVA_ARGS="-Djava.awt.headless=true -Djenkins.install.runSetupWizard=false"
-##### RUN chown -R jenkins:jenkins $JENKINS_HOME/init.groovy.d/
+
 # copy knife and client configuration used by the pipline to talk to chef-server
 # then set environment variables used in jenkins build container
 RUN mkdir -p $JENKINS_HOME/.chef
