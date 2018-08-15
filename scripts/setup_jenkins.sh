@@ -25,6 +25,15 @@ create_basic-setup-groovy() {
 
 import hudson.security.*
 import jenkins.model.*
+//-------beg cp
+import jenkins.branch.BranchProperty;
+import jenkins.branch.BranchSource;
+import jenkins.branch.DefaultBranchPropertyStrategy;
+import jenkins.plugins.git.GitSCMSource;
+import org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject;
+// is needed // ----> import jenkins.model.Jenkins
+// is needed // ----> def instance = Jenkins.getInstance()
+//-------end cp
 
 def out
 def config = new HashMap()
@@ -43,6 +52,16 @@ instance.setSecurityRealm(hudsonRealm)
 def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
 strategy.setAllowAnonymousRead(false)
 instance.setAuthorizationStrategy(strategy)
+
+//-- beg cp
+def source = new GitSCMSource(null, "git://github.com/mtyler/chef-infra-base.git", "", "*", "", false)
+def mp = instance.createProject(WorkflowMultiBranchProject.class, "chef-infra-base")
+mp.getSourcesList().add(new BranchSource(source, new DefaultBranchPropertyStrategy(new BranchProperty[0])));
+//BranchIndexing(mp,mp.getIndexing)
+//mp.scheduleBuild2()
+instance.getItemByFullName("chef-infra-base").scheduleBuild()
+out.println "--> build scheduled"
+//-- end cp
 
 //// enable the use of jenkins-cli.jar
 ////instance.CLI.get().setEnabled(true)
@@ -330,18 +349,18 @@ sleep 3
 ## TODO replace these jenkins-cli commands with the blueocean rest calls
 ##  curl -v -u admin:admin -d '{"accessToken": boo"}' -H "Content-Type:application/json" -XPUT http://localhost:8080/jenkins/blue/rest/organizations/jenkins/scm/github/validate
 ## from: https://github.com/jenkinsci/blueocean-plugin/tree/master/blueocean-rest#multibranch-pipeline-api
-curl -v -u $ADMIN_USR:$ADMIN_PWD -d '{"accessToken": "${GITHUB_TOKEN}"}' -H "Content-Type:application/json" -XPUT http://localhost:8080/jenkins/blue/rest/organizations/jenkins/scm/github/validate
+## curl -v -u $ADMIN_USR:$ADMIN_PWD -d '{"accessToken": "$GITHUB_TOKEN"}' -H "Content-Type:application/json" -XPUT http://localhost:8080/jenkins/blue/rest/organizations/jenkins/scm/github/validate
 
-#      create_github-credentials
-#      create_blueocean-github-domain
-#      java -jar ./jenkins-cli.jar -s http://localhost:8080/ who-am-i --username $ADMIN_USR --password $ADMIN_PWD
-#      if [ $? -eq 0 ]; then echo "Connections successful!"; fi
+      create_github-credentials
+      create_blueocean-github-domain
+      java -jar ./jenkins-cli.jar -s http://localhost:8080/ who-am-i --username $ADMIN_USR --password $ADMIN_PWD
+      if [ $? -eq 0 ]; then echo "Connections successful!"; fi
 #sleep 3
-#      java -jar ./jenkins-cli.jar -auth $ADMIN_USR:$ADMIN_PWD -s http://localhost:8080/ create-credentials-domain-by-xml user::user::$ADMIN_USR < $WKDIR$BUILD_CONTEXT/blueocean-github-domain.xml
-#      if [ $? -eq 0 ]; then echo "Domain created!"; fi
+      java -jar ./jenkins-cli.jar -auth $ADMIN_USR:$ADMIN_PWD -s http://localhost:8080/ create-credentials-domain-by-xml user::user::$ADMIN_USR < $WKDIR$BUILD_CONTEXT/blueocean-github-domain.xml
+      if [ $? -eq 0 ]; then echo "Domain created!"; fi
 #sleep 3
-#      java -jar ./jenkins-cli.jar -auth $ADMIN_USR:$ADMIN_PWD -s http://localhost:8080/ create-credentials-by-xml user::user::$ADMIN_USR blueocean-github-domain < $WKDIR$BUILD_CONTEXT/github-credentials.xml
-#      if [ $? -eq 0 ]; then echo "Github Access Token added!"; fi
+      java -jar ./jenkins-cli.jar -auth $ADMIN_USR:$ADMIN_PWD -s http://localhost:8080/ create-credentials-by-xml user::user::$ADMIN_USR blueocean-github-domain < $WKDIR$BUILD_CONTEXT/github-credentials.xml
+      if [ $? -eq 0 ]; then echo "Github Access Token added!"; fi
 #sleep 3
       ##
       ## End creating github access token
@@ -350,9 +369,9 @@ curl -v -u $ADMIN_USR:$ADMIN_PWD -d '{"accessToken": "${GITHUB_TOKEN}"}' -H "Con
       ## ----------------------------------------------------------------------
       ## Begin creating a job
       echo "Creating piplines..."
-      java -jar jenkins-cli.jar -auth $ADMIN_USR:$ADMIN_PWD -s http://localhost:8080 create-job chef-infra-base < $WKDIR/scripts/config.xml
+    ##  java -jar jenkins-cli.jar -auth $ADMIN_USR:$ADMIN_PWD -s http://localhost:8080 create-job chef-infra-base < $WKDIR/scripts/config.xml
       echo "Pipeline created."
-sleep 3
+##sleep 3
       #java -jar jenkins-cli.jar -auth $ADMIN_USR:$ADMIN_PWD -s http://localhost:8080/ build chef-infra-base/master
       ## End creating job
       ## ----------------------------------------------------------------------
