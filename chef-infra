@@ -7,8 +7,11 @@
 #
 . helpers.sh
 #
-# helper functions
+# setup some vars
 #
+PROFILE_NAME="admin/cis-ubuntu16.04lts-level1-server"
+PROFILE_VER="1.0.0-4"
+
 usage() {
   echo "Usage: $0 [Sub Command] [options]"
   echo ""
@@ -309,7 +312,7 @@ setup_infra() {
 
   echo "Make compliance profiles available..."
   # This is an API call to Automate to make baseline profile available with an
-  curl -d '{"name": "linux-baseline", "version": "2.2.0"}' -H "Content-Type: application/json" -H "api-token: $(<./a2-token)" -X POST 'https://automate-deployment.test/api/v0/compliance/profiles?owner=admin' --insecure
+  curl -d '{"name": "${PROFILE_NAME}", "version": "${PROFILE_VER}"}' -H "Content-Type: application/json" -H "api-token: $(<./a2-token)" -X POST 'https://automate-deployment.test/api/v0/compliance/profiles?owner=admin' --insecure
   #TODO check for error and print helpful message
   echo "Configure Automate for backups"
   # configure automate to keep backups in the shared directory
@@ -364,8 +367,28 @@ setup_cicd() {
   echo "    A Dockerfile, Jenkinsfile, .kitchen.docker.yml copied and modified"
   echo "    accordingly from https://www.github.com/mtyler/chef-infra-base"
   echo ""
+  ### moving jenkins logic to it's own repo
+  ### ./scripts/setup_jenkins.sh
+  if [ ! -d $WKDIR/tmp ]; then
+    mkdir -p $WKDIR/tmp
+  fi
+  if [ ! -d $WKDIR/tmp/jenkins-cookbook-pipeline ]; then
+    echo "Cloning cookbook pipeline..."
+    cd $WKDIR/tmp && git clone git://github.com/mtyler/jenkins-cookbook-pipeline.git
+  else
+    echo "Fetching cookbook pipeline..."
+    cd $WKDIR/tmp/jenkins-cookbook-pipeline && git fetch --all && git reset --hard origin/master
+  fi
+  cp $WKDIR/.chef/cicdsvc-knife.rb $WKDIR/tmp/jenkins-cookbook-pipeline/jenkins-master/cicdsvc-knife.rb
+  cp $WKDIR/.chef/cicdsvc.pem $WKDIR/tmp/jenkins-cookbook-pipeline/jenkins-master/cicdsvc.pem
+  cp $WKDIR/github-token $WKDIR/tmp/jenkins-cookbook-pipeline/jenkins-master/github-token
 
-  ./scripts/setup_jenkins.sh
+
+  chmod +x $WKDIR/tmp/jenkins-cookbook-pipeline/jenkins-master/setup_jenkins.sh
+  $WKDIR/tmp/jenkins-cookbook-pipeline/jenkins-master/setup_jenkins.sh
+  if [ ! $? -eq 0 ]; then
+    do_error "Something went wrong setting up pipeline"
+  fi
   echo ""
   echo "Steps:"
   echo "    1. Navigate to http://localhost:8080/blue"
@@ -552,7 +575,6 @@ case $1 in
     while getopts ":c:bpwhx" o; do
       case $o in
         b|builder )
-          shift
           is_bldr=true
           ;;
         c|count )
@@ -566,11 +588,9 @@ case $1 in
           is_cicd=true
           ;;
         w|workstation )
-          shift
           is_work=true
           ;;
         x )
-          shift
           is_infra=false
           ;;
         * )
@@ -593,15 +613,12 @@ case $1 in
       case $o in
         a|automate )
           a2_bak=$OPTARG
-          shift
           ;;
         k|keys )
           keys_bak=$OPTARG
-          shift
           ;;
         s|server )
           srvr_bak=$OPTARG
-          shift
           ;;
         h|help )
           usage
@@ -614,7 +631,6 @@ case $1 in
     do_restore
     ;;
   log )
-    shift
     vagrant ssh a2 -c 'journalctl -u chef-automate -f'
     ;;
   teardown )
@@ -643,19 +659,15 @@ case $1 in
     teardown_infra
     ;;
   troubleshoot )
-    shift
     do_troubleshoot
     ;;
   test )
-    shift
     do_test
     ;;
   write )
-    shift
     do_build_recreate
     ;;
   * )
-    shift
     usage
     ;;
 esac

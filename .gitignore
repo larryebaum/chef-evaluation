@@ -24,6 +24,7 @@ scripts/jenkins.model.*
 scripts/*.pem
 scripts/*.xml
 scripts/*.jar
+jenkins-cli.jar
 
 
 tmp

@@ -11,6 +11,8 @@ JENKINS_HOME="/var/jenkins_home"
 ADMIN_USR="admin"
 ADMIN_PWD="nimda"
 GITHUB_TOKEN="$(cat $WKDIR/github-token)"
+JENKINS_PROJECT="chef-infra-base"
+PROJECT_GIT_REMOTE="git://github.com/mtyler/chef-infra-base.git"
 
 ##
 ## create an initialization script to create admin user and turn off startup wizard
@@ -25,15 +27,11 @@ create_basic-setup-groovy() {
 
 import hudson.security.*
 import jenkins.model.*
-//-------beg cp
 import jenkins.branch.BranchProperty;
 import jenkins.branch.BranchSource;
 import jenkins.branch.DefaultBranchPropertyStrategy;
 import jenkins.plugins.git.GitSCMSource;
 import org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject;
-// is needed // ----> import jenkins.model.Jenkins
-// is needed // ----> def instance = Jenkins.getInstance()
-//-------end cp
 
 def out
 def config = new HashMap()
@@ -53,15 +51,13 @@ def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
 strategy.setAllowAnonymousRead(false)
 instance.setAuthorizationStrategy(strategy)
 
-//-- beg cp
-def source = new GitSCMSource(null, "git://github.com/mtyler/chef-infra-base.git", "", "*", "", false)
-def mp = instance.createProject(WorkflowMultiBranchProject.class, "chef-infra-base")
+//-- begin create project
+def source = new GitSCMSource(null, '${PROJECT_GIT_REMOTE}', "", "*", "", false)
+def mp = instance.createProject(WorkflowMultiBranchProject.class, '${JENKINS_PROJECT}')
 mp.getSourcesList().add(new BranchSource(source, new DefaultBranchPropertyStrategy(new BranchProperty[0])));
-//BranchIndexing(mp,mp.getIndexing)
-//mp.scheduleBuild2()
-instance.getItemByFullName("chef-infra-base").scheduleBuild()
+instance.getItemByFullName('${JENKINS_PROJECT}').scheduleBuild()
 out.println "--> build scheduled"
-//-- end cp
+//-- end create project
 
 //// enable the use of jenkins-cli.jar
 ////instance.CLI.get().setEnabled(true)
@@ -102,86 +98,6 @@ cat > $WKDIR$BUILD_CONTEXT/github-credentials.xml <<EOL
       </com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl>
 EOL
 }
-## generate xml from existing project
-## java -jar jenkins-cli.jar -auth admin:nimda -s http://localhost:8080 get-job chef-infra-base
-##
-create_job-config() {
-cat > $WKDIR$BUILD_CONTEXT/job-config.xml <<EOL
-<?xml version='1.1' encoding='UTF-8'?>
-<org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject plugin="workflow-multibranch@2.20">
-  <properties>
-    <io.jenkins.blueocean.rest.impl.pipeline.credential.BlueOceanCredentialsProvider_-FolderPropertyImpl plugin="blueocean-pipeline-scm-api@1.7.1">
-      <domain plugin="credentials@2.1.18">
-        <name>blueocean-folder-credential-domain</name>
-        <description>Blue Ocean Folder Credentials domain</description>
-        <specifications/>
-      </domain>
-      <user>admin</user>
-      <id>github</id>
-    </io.jenkins.blueocean.rest.impl.pipeline.credential.BlueOceanCredentialsProvider_-FolderPropertyImpl>
-  </properties>
-  <folderViews class="jenkins.branch.MultiBranchProjectViewHolder" plugin="branch-api@2.0.20">
-    <owner class="org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject" reference="../.."/>
-  </folderViews>
-  <healthMetrics>
-    <com.cloudbees.hudson.plugins.folder.health.WorstChildHealthMetric plugin="cloudbees-folder@6.5.1">
-      <nonRecursive>false</nonRecursive>
-    </com.cloudbees.hudson.plugins.folder.health.WorstChildHealthMetric>
-  </healthMetrics>
-  <icon class="jenkins.branch.MetadataActionFolderIcon" plugin="branch-api@2.0.20">
-    <owner class="org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject" reference="../.."/>
-  </icon>
-  <orphanedItemStrategy class="com.cloudbees.hudson.plugins.folder.computed.DefaultOrphanedItemStrategy" plugin="cloudbees-folder@6.5.1">
-    <pruneDeadBranches>true</pruneDeadBranches>
-    <daysToKeep>-1</daysToKeep>
-    <numToKeep>-1</numToKeep>
-  </orphanedItemStrategy>
-  <triggers/>
-  <disabled>false</disabled>
-  <sources class="jenkins.branch.MultiBranchProject$BranchSourceList" plugin="branch-api@2.0.20">
-    <data>
-      <jenkins.branch.BranchSource>
-        <source class="org.jenkinsci.plugins.github_branch_source.GitHubSCMSource" plugin="github-branch-source@2.3.6">
-          <id>blueocean</id>
-          <apiUri>https://api.github.com</apiUri>
-          <credentialsId>github</credentialsId>
-          <repoOwner>mtyler</repoOwner>
-          <repository>chef-infra-base</repository>
-          <traits>
-            <org.jenkinsci.plugins.github__branch__source.BranchDiscoveryTrait>
-              <strategyId>3</strategyId>
-            </org.jenkinsci.plugins.github__branch__source.BranchDiscoveryTrait>
-            <org.jenkinsci.plugins.github__branch__source.ForkPullRequestDiscoveryTrait>
-              <strategyId>1</strategyId>
-              <trust class="org.jenkinsci.plugins.github_branch_source.ForkPullRequestDiscoveryTrait$TrustPermission"/>
-            </org.jenkinsci.plugins.github__branch__source.ForkPullRequestDiscoveryTrait>
-            <org.jenkinsci.plugins.github__branch__source.OriginPullRequestDiscoveryTrait>
-              <strategyId>1</strategyId>
-            </org.jenkinsci.plugins.github__branch__source.OriginPullRequestDiscoveryTrait>
-            <jenkins.plugins.git.traits.CleanBeforeCheckoutTrait plugin="git@3.9.1">
-              <extension class="hudson.plugins.git.extensions.impl.CleanBeforeCheckout"/>
-            </jenkins.plugins.git.traits.CleanBeforeCheckoutTrait>
-            <jenkins.plugins.git.traits.CleanAfterCheckoutTrait plugin="git@3.9.1">
-              <extension class="hudson.plugins.git.extensions.impl.CleanCheckout"/>
-            </jenkins.plugins.git.traits.CleanAfterCheckoutTrait>
-            <jenkins.plugins.git.traits.LocalBranchTrait plugin="git@3.9.1">
-              <extension class="hudson.plugins.git.extensions.impl.LocalBranch">
-                <localBranch>**</localBranch>
-              </extension>
-            </jenkins.plugins.git.traits.LocalBranchTrait>
-          </traits>
-        </source>
-      </jenkins.branch.BranchSource>
-    </data>
-    <owner class="org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject" reference="../.."/>
-  </sources>
-  <factory class="org.jenkinsci.plugins.workflow.multibranch.WorkflowBranchProjectFactory">
-    <owner class="org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject" reference="../.."/>
-    <scriptPath>Jenkinsfile</scriptPath>
-  </factory>
-</org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject>
-EOL
-}
 
 ##
 ## create files required for Docker build to copy to container
@@ -207,46 +123,11 @@ create_location-configuration() {
 EOL
 }
 
-create_global-libraries() {
-    cat > $WKDIR$BUILD_CONTEXT/org.jenkinsci.plugins.workflow.libs.GlobalLibraries.xml <<EOL
-<?xml version='1.1' encoding='UTF-8'?>
-<org.jenkinsci.plugins.workflow.libs.GlobalLibraries plugin="workflow-cps-global-lib@2.9">
-  <libraries>
-    <org.jenkinsci.plugins.workflow.libs.LibraryConfiguration>
-      <name>jenkins-cookbook-library</name>
-      <retriever class="org.jenkinsci.plugins.workflow.libs.SCMSourceRetriever">
-        <scm class="org.jenkinsci.plugins.github_branch_source.GitHubSCMSource" plugin="github-branch-source@2.3.6">
-          <id>b7c8fb5b-d375-4b72-96fa-0b80c9cf2023</id>
-          <repoOwner>mtyler</repoOwner>
-          <repository>jenkins-cookbook-library</repository>
-          <traits>
-            <org.jenkinsci.plugins.github__branch__source.BranchDiscoveryTrait>
-              <strategyId>1</strategyId>
-            </org.jenkinsci.plugins.github__branch__source.BranchDiscoveryTrait>
-            <org.jenkinsci.plugins.github__branch__source.OriginPullRequestDiscoveryTrait>
-              <strategyId>1</strategyId>
-            </org.jenkinsci.plugins.github__branch__source.OriginPullRequestDiscoveryTrait>
-            <org.jenkinsci.plugins.github__branch__source.ForkPullRequestDiscoveryTrait>
-              <strategyId>1</strategyId>
-              <trust class="org.jenkinsci.plugins.github_branch_source.ForkPullRequestDiscoveryTrait$TrustPermission"/>
-            </org.jenkinsci.plugins.github__branch__source.ForkPullRequestDiscoveryTrait>
-          </traits>
-        </scm>
-      </retriever>
-      <defaultVersion>master</defaultVersion>
-      <implicit>true</implicit>
-      <allowVersionOverride>true</allowVersionOverride>
-      <includeInChangesets>true</includeInChangesets>
-    </org.jenkinsci.plugins.workflow.libs.LibraryConfiguration>
-  </libraries>
-</org.jenkinsci.plugins.workflow.libs.GlobalLibraries>
-EOL
-}
 #
 # copy knife and pem file to scripts to minimize the size of Docker build context
 #
-cp $WKDIR/.chef/cicdsvc-knife.rb $WKDIR$BUILD_CONTEXT/knife.rb
-cp $WKDIR/.chef/cicdsvc.pem $WKDIR$BUILD_CONTEXT/client.pem
+cp $WKDIR/.chef/cicdsvc-knife.rb $WKDIR$BUILD_CONTEXT/cicdsvc-knife.rb
+cp $WKDIR/.chef/cicdsvc.pem $WKDIR$BUILD_CONTEXT/cicdsvc.pem
 
 # ---------------------------------------------------------------------------
 # cleanup any previous images and volumes
@@ -269,7 +150,6 @@ create_basic-setup-groovy
 create_last-exec-version
 create_upgrade-wizard-state
 create_location-configuration
-create_global-libraries
 
 echo "calling docker build -t $CI_IMAGE"
 docker build -t $CI_IMAGE \
@@ -345,36 +225,23 @@ sleep 3
       ## https://github.com/jenkinsci/credentials-plugin/blob/master/docs/user.adoc
       ##
       echo "Creating github credentials..."
-
 ## TODO replace these jenkins-cli commands with the blueocean rest calls
+## TODO -OR- this should be moved to the init.d.groovy script to keep things together
 ##  curl -v -u admin:admin -d '{"accessToken": boo"}' -H "Content-Type:application/json" -XPUT http://localhost:8080/jenkins/blue/rest/organizations/jenkins/scm/github/validate
 ## from: https://github.com/jenkinsci/blueocean-plugin/tree/master/blueocean-rest#multibranch-pipeline-api
 ## curl -v -u $ADMIN_USR:$ADMIN_PWD -d '{"accessToken": "$GITHUB_TOKEN"}' -H "Content-Type:application/json" -XPUT http://localhost:8080/jenkins/blue/rest/organizations/jenkins/scm/github/validate
-
       create_github-credentials
       create_blueocean-github-domain
       java -jar ./jenkins-cli.jar -s http://localhost:8080/ who-am-i --username $ADMIN_USR --password $ADMIN_PWD
       if [ $? -eq 0 ]; then echo "Connections successful!"; fi
-#sleep 3
       java -jar ./jenkins-cli.jar -auth $ADMIN_USR:$ADMIN_PWD -s http://localhost:8080/ create-credentials-domain-by-xml user::user::$ADMIN_USR < $WKDIR$BUILD_CONTEXT/blueocean-github-domain.xml
       if [ $? -eq 0 ]; then echo "Domain created!"; fi
-#sleep 3
       java -jar ./jenkins-cli.jar -auth $ADMIN_USR:$ADMIN_PWD -s http://localhost:8080/ create-credentials-by-xml user::user::$ADMIN_USR blueocean-github-domain < $WKDIR$BUILD_CONTEXT/github-credentials.xml
       if [ $? -eq 0 ]; then echo "Github Access Token added!"; fi
-#sleep 3
       ##
       ## End creating github access token
       ## ----------------------------------------------------------------------
 
-      ## ----------------------------------------------------------------------
-      ## Begin creating a job
-      echo "Creating piplines..."
-    ##  java -jar jenkins-cli.jar -auth $ADMIN_USR:$ADMIN_PWD -s http://localhost:8080 create-job chef-infra-base < $WKDIR/scripts/config.xml
-      echo "Pipeline created."
-##sleep 3
-      #java -jar jenkins-cli.jar -auth $ADMIN_USR:$ADMIN_PWD -s http://localhost:8080/ build chef-infra-base/master
-      ## End creating job
-      ## ----------------------------------------------------------------------
     fi
     echo "Jenkins started on localhost:8080"
     echo "Startup credentials user: $ADMIN_USR pwd: $ADMIN_PWD"
