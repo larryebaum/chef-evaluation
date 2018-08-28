@@ -17,10 +17,21 @@ pkgs
 pkgs/*
 roles
 roles/*
+scripts/*.groovy
+scripts/*knife.rb
+scripts/jenkins.install.*
+scripts/jenkins.model.*
+scripts/*.pem
+scripts/*.xml
+scripts/*.jar
+jenkins-cli.jar
+
+
 tmp
 tmp/*
 
 a2-token
+github-token
 automate.license
 bldr.env
 Vagrantfile

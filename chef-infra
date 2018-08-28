@@ -7,8 +7,11 @@
 #
 . helpers.sh
 #
-# helper functions
+# setup some vars
 #
+PROFILE_NAME="admin/cis-ubuntu16.04lts-level1-server"
+PROFILE_VER="1.0.0-4"
+
 usage() {
   echo "Usage: $0 [Sub Command] [options]"
   echo ""
@@ -33,6 +36,7 @@ usage() {
   echo "  options:"
   echo "  -c, --count Number of nodes to create (integer, default: 2)"
   echo "  -b, --builder add an on-prem builder"
+  echo "  -p, --pipeline add a cicd cookbook pipeline"
   echo "  -w, --workstation add a chef workstation"
   echo "  -x exclude infrastructure (Automate, Server, Nodes)"
   echo ""
@@ -45,10 +49,11 @@ usage() {
   echo "  -p,--pretend just list what will be done"
   echo "  -y,--yes     answer yes to all prompts"
   echo ""
+  echo "troubleshoot: Print useful cmds"
+  echo ""
   echo "write: Create/overwrite local files: Vagrantfile,"
   echo "              knife.rb, base.rb, etc."
-  echo ""
-  echo "troubleshoot: Print useful cmds"
+
 
   exit 0;
 }
@@ -177,6 +182,19 @@ Vagrant.configure(2) do |config|
     bldr.vm.provision "shell", inline: "${GUEST_WKDIR}/tmp/bldr_vm_provision.sh"
   end
 
+  config.vm.define :cicd do |cicd|
+    cicd.vm.provider "virtualbox" do |vb|
+      vb.memory = 512
+      vb.cpus = 2
+    end
+    cicd.vm.box = "bento/ubuntu-16.04"
+    cicd.vm.hostname = "cicd.test"
+    cicd.vm.synced_folder ".", "${GUEST_WKDIR}", create: true
+    cicd.vm.network :private_network, ip: "192.168.33.196"
+    cicd.ssh.username = "vagrant"
+    cicd.ssh.password = "vagrant"
+    cicd.vm.provision "shell", inline: "${GUEST_WKDIR}/tmp/cicd_vm_provision.sh"
+  end
 end
 EOL
 }
@@ -212,6 +230,7 @@ do_build() {
   else
     echo "Creating knife.rb..."
     create_knife_rb
+    sed -e s/admin/cicdsvc/g $WKDIR/.chef/knife.rb > $WKDIR/.chef/cicdsvc-knife.rb
   fi
   if [ -f $WKDIR/roles/base.rb ] ; then
     echo "base.rb exists.  Nothing to do here."
@@ -293,7 +312,7 @@ setup_infra() {
 
   echo "Make compliance profiles available..."
   # This is an API call to Automate to make baseline profile available with an
-  curl -d '{"name": "linux-baseline", "version": "2.2.0"}' -H "Content-Type: application/json" -H "api-token: $(<./a2-token)" -X POST 'https://automate-deployment.test/api/v0/compliance/profiles?owner=admin' --insecure
+  curl -d '{"name": "${PROFILE_NAME}", "version": "${PROFILE_VER}"}' -H "Content-Type: application/json" -H "api-token: $(<./a2-token)" -X POST 'https://automate-deployment.test/api/v0/compliance/profiles?owner=admin' --insecure
   #TODO check for error and print helpful message
   echo "Configure Automate for backups"
   # configure automate to keep backups in the shared directory
@@ -337,6 +356,48 @@ setup_builder() {
   add_host builder.test 192.168.33.197
 }
 
+setup_cicd() {
+  echo ""
+  echo ""
+  echo ""
+  echo "Note! ...  cicd uses the jenkinsci/blueocean docker image"
+  echo "PreReqs include:"
+  echo "    Docker https://www.docker.com/"
+  echo "    Manual configuration of Jenkins https://jenkins.io/projects/blueocean/"
+  echo "    A Dockerfile, Jenkinsfile, .kitchen.docker.yml copied and modified"
+  echo "    accordingly from https://www.github.com/mtyler/chef-infra-base"
+  echo ""
+  ### moving jenkins logic to it's own repo
+  ### ./scripts/setup_jenkins.sh
+  if [ ! -d $WKDIR/tmp ]; then
+    mkdir -p $WKDIR/tmp
+  fi
+  if [ ! -d $WKDIR/tmp/jenkins-cookbook-pipeline ]; then
+    echo "Cloning cookbook pipeline..."
+    cd $WKDIR/tmp && git clone git://github.com/mtyler/jenkins-cookbook-pipeline.git
+  else
+    echo "Fetching cookbook pipeline..."
+    cd $WKDIR/tmp/jenkins-cookbook-pipeline && git fetch --all && git reset --hard origin/master
+  fi
+  ## TODO find a more better way of passing key and knife config
+  cp $WKDIR/.chef/cicdsvc-knife.rb $WKDIR/tmp/jenkins-cookbook-pipeline/jenkins-master/cicdsvc-knife.rb
+  cp $WKDIR/.chef/cicdsvc.pem $WKDIR/tmp/jenkins-cookbook-pipeline/jenkins-master/cicdsvc.pem
+  cp $WKDIR/github-token $WKDIR/tmp/jenkins-cookbook-pipeline/jenkins-master/github-token
+
+
+  chmod +x $WKDIR/tmp/jenkins-cookbook-pipeline/jenkins-master/setup_jenkins.sh
+  $WKDIR/tmp/jenkins-cookbook-pipeline/jenkins-master/setup_jenkins.sh
+  if [ ! $? -eq 0 ]; then
+    do_error "Something went wrong setting up pipeline"
+  fi
+  echo ""
+  echo "Steps:"
+  echo "    1. Navigate to http://localhost:8080/blue"
+  echo "    2. Open a shell on the image to get initial password:"
+  echo "         docker exec -it jenkins-blueocean bash"
+  echo "    3. Fork https://www.github.com/mtyler/chef-infra-base"
+  echo "    4. Follow jenkins setup wizard to connect the cookbook"
+}
 
 do_backup() {
   echo "Begin taking backups..."
@@ -441,9 +502,11 @@ teardown_infra() {
   if ! $is_pre ; then mv -f ./logs ./removing ; fi
   echo "remove ./tmp dir..."
   if ! $is_pre ; then mv -f ./tmp ./removing ; fi
+  echo "remove bldr.env..."
+  if ! $is_pre ; then mv -f bldr.env ./removing ; fi
 
-  # make sure user really wants to delete if they did
-  # not pass cli argument -y
+
+  # make sure user really wants to delete unless `-y` was specified
   if ! $is_yes ;
   then
     while true; do
@@ -468,6 +531,13 @@ teardown_infra() {
   if ! $is_pre ; then mv -f ./.vagrant ./removing ; fi
   echo "nuke the temporary ./removing dir..."
   if ! $is_pre ; then rm -rf ./removing ; fi
+  echo "removing docker jenkinsci-blueocean image and jenkins-data volume..."
+  if ! $is_pre ; then
+    docker stop jenkinsci-blueocean
+    docker rmi jenkinsci/blueocean
+    docker rmi evarga/jenkins-slave
+    docker volume rm jenkins-data
+  fi
   echo ""
   echo "Teardown of Chef Infrastructure complete. Thanks for playing... :)"
 }
@@ -490,18 +560,22 @@ cnt=2
 is_full=false
 is_yes=false
 is_pre=false
+# is builder going to be created?
 is_bldr=false
+# is workstation going to be created?
 is_work=false
+# is infrastructure going to be created?
 is_infra=true
+# is a pipeline going to be created?
+is_cicd=false
 
 # parse command line
 case $1 in
   setup )
     shift
-    while getopts ":c:bwhx" o; do
+    while getopts ":c:bpwhx" o; do
       case $o in
         b|builder )
-          shift
           is_bldr=true
           ;;
         c|count )
@@ -511,12 +585,13 @@ case $1 in
         h|help )
           usage
           ;;
+        p|pipeline )
+          is_cicd=true
+          ;;
         w|workstation )
-          shift
           is_work=true
           ;;
         x )
-          shift
           is_infra=false
           ;;
         * )
@@ -527,6 +602,7 @@ case $1 in
     if [ "$is_infra" = true ]; then setup_infra; fi
     if [ "$is_work" = true ]; then setup_workstation; fi
     if [ "$is_bldr" = true ]; then setup_builder; fi
+    if [ "$is_cicd" = true ]; then setup_cicd; fi
     ;;
   backup )
     shift
@@ -538,15 +614,12 @@ case $1 in
       case $o in
         a|automate )
           a2_bak=$OPTARG
-          shift
           ;;
         k|keys )
           keys_bak=$OPTARG
-          shift
           ;;
         s|server )
           srvr_bak=$OPTARG
-          shift
           ;;
         h|help )
           usage
@@ -559,7 +632,6 @@ case $1 in
     do_restore
     ;;
   log )
-    shift
     vagrant ssh a2 -c 'journalctl -u chef-automate -f'
     ;;
   teardown )
@@ -588,19 +660,15 @@ case $1 in
     teardown_infra
     ;;
   troubleshoot )
-    shift
     do_troubleshoot
     ;;
   test )
-    shift
     do_test
     ;;
   write )
-    shift
     do_build_recreate
     ;;
   * )
-    shift
     usage
     ;;
 esac
