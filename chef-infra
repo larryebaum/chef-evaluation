@@ -379,6 +379,7 @@ setup_cicd() {
     echo "Fetching cookbook pipeline..."
     cd $WKDIR/tmp/jenkins-cookbook-pipeline && git fetch --all && git reset --hard origin/master
   fi
+  ## TODO find a more better way of passing key and knife config
   cp $WKDIR/.chef/cicdsvc-knife.rb $WKDIR/tmp/jenkins-cookbook-pipeline/jenkins-master/cicdsvc-knife.rb
   cp $WKDIR/.chef/cicdsvc.pem $WKDIR/tmp/jenkins-cookbook-pipeline/jenkins-master/cicdsvc.pem
   cp $WKDIR/github-token $WKDIR/tmp/jenkins-cookbook-pipeline/jenkins-master/github-token
